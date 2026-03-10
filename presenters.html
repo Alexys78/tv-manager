@@ -13,25 +13,10 @@
       <header id="appHeader" data-active-page="personnel-recruitment"></header>
 
       <h1>Recrutement</h1>
+      <p id="presentersFeedback" class="feedback" aria-live="polite"></p>
 
-      <div class="presenters-layout">
-        <section class="game-block">
-          <div class="today-head">
-            <h2>Présentateurs disponibles</h2>
-            <span id="presentersMarketCount" class="day-badge">0</span>
-          </div>
-
-          <div class="presenters-toolbar">
-            <input id="presentersSearchInput" type="search" placeholder="Rechercher un présentateur..." />
-            <select id="presentersSpecialtySelect">
-              <option value="all">Toutes les spécialités</option>
-            </select>
-          </div>
-
-          <div id="presentersMarketList" class="studio-presenters-list"></div>
-          <p id="presentersFeedback" class="feedback" aria-live="polite"></p>
-        </section>
-      </div>
+      <div id="staffRecruitTabs" class="market-tabs staff-role-tabs"></div>
+      <div id="staffRecruitContent" class="market-content"></div>
     </section>
   </main>
 

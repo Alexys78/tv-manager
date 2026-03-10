@@ -7,8 +7,11 @@
   if (!session) return;
 
   const state = {
+    role: "presenters",
     search: "",
-    specialty: "all"
+    specialty: "all",
+    sortBy: "name",
+    asc: true
   };
 
   function formatEuro(value) {
@@ -18,13 +21,38 @@
   function setFeedback(message, type) {
     const node = document.getElementById("presentersFeedback");
     if (!node) return;
-    node.textContent = message;
-    node.className = `feedback ${type || ""}`.trim();
+    node.textContent = String(message || "");
+    node.className = message ? `feedback ${type || "success"}` : "feedback";
   }
 
-  function getMarket() {
-    if (!presenterEngine || typeof presenterEngine.getMarketPresentersForCurrentSession !== "function") return [];
-    return presenterEngine.getMarketPresentersForCurrentSession();
+  function getRoles() {
+    if (presenterEngine && typeof presenterEngine.listRolesForCurrentSession === "function") {
+      const roles = presenterEngine.listRolesForCurrentSession();
+      if (Array.isArray(roles) && roles.length > 0) return roles;
+    }
+    return [
+      { id: "presenters", label: "Présentateurs", singular: "Présentateur" },
+      { id: "journalists", label: "Journalistes", singular: "Journaliste" }
+    ];
+  }
+
+  function getRoleMeta(roleId) {
+    const roles = getRoles();
+    return roles.find((item) => item.id === roleId) || roles[0];
+  }
+
+  function getMarket(roleId) {
+    const role = String(roleId || state.role || "presenters");
+    if (presenterEngine && typeof presenterEngine.getMarketStaffByRoleForCurrentSession === "function") {
+      return presenterEngine.getMarketStaffByRoleForCurrentSession(role);
+    }
+    if (role === "journalists" && presenterEngine && typeof presenterEngine.getMarketJournalistsForCurrentSession === "function") {
+      return presenterEngine.getMarketJournalistsForCurrentSession();
+    }
+    if (presenterEngine && typeof presenterEngine.getMarketPresentersForCurrentSession === "function") {
+      return presenterEngine.getMarketPresentersForCurrentSession();
+    }
+    return [];
   }
 
   function formatStarBonusLabel(value) {
@@ -34,146 +62,270 @@
     return "+0★";
   }
 
-  function presenterRow(presenter, options) {
-    const opts = options && typeof options === "object" ? options : {};
-    const row = document.createElement("div");
-    row.className = "studio-presenter-row";
+  function compareRows(a, b) {
+    const key = String(state.sortBy || "name");
+    let result = 0;
+    if (key === "salary") {
+      result = (Number(a.salaryMonthly) || 0) - (Number(b.salaryMonthly) || 0);
+    } else if (key === "impact") {
+      result = (Number(a.starBonus) || 0) - (Number(b.starBonus) || 0);
+    } else if (key === "bonus") {
+      result = (Number(a.signingBonus) || 0) - (Number(b.signingBonus) || 0);
+    } else {
+      result = String(a.fullName || "").localeCompare(String(b.fullName || ""), "fr", { sensitivity: "base" });
+    }
+    if (result === 0) {
+      result = String(a.fullName || "").localeCompare(String(b.fullName || ""), "fr", { sensitivity: "base" });
+    }
+    return state.asc ? result : -result;
+  }
 
-    const main = document.createElement("div");
-    main.className = "studio-presenter-main";
+  function renderTabs() {
+    const host = document.getElementById("staffRecruitTabs");
+    if (!host) return;
+    const roles = getRoles();
+    if (!roles.some((role) => role.id === state.role)) state.role = roles[0] ? roles[0].id : "presenters";
 
-    const name = document.createElement("div");
-    name.className = "studio-presenter-name";
-    name.textContent = presenter.fullName;
-
-    const meta = document.createElement("div");
-    meta.className = "studio-presenter-meta";
-    const badges = [
-      presenter.specialty || "Généraliste",
-      `Édito ${presenter.editorial}`,
-      `Charisme ${presenter.charisma}`,
-      `Notoriété ${presenter.notoriety}`
-    ];
-    badges.forEach((label) => {
-      const badge = document.createElement("span");
-      badge.className = "studio-presenter-badge";
-      badge.textContent = label;
-      meta.appendChild(badge);
-    });
-
-    const starBadge = document.createElement("span");
-    starBadge.className = "studio-presenter-badge strong";
-    starBadge.textContent = `Impact ${formatStarBonusLabel(presenter.starBonus)}`;
-    meta.appendChild(starBadge);
-
-    const salaryBadge = document.createElement("span");
-    salaryBadge.className = "studio-presenter-badge warn";
-    salaryBadge.textContent = `${formatEuro(presenter.salaryMonthly || presenter.salaryDaily || 0)} / mois`;
-    meta.appendChild(salaryBadge);
-
-    main.append(name, meta);
-
-    const actionWrap = document.createElement("div");
-    actionWrap.className = "presenter-action-wrap";
-    if (opts.mode === "market") {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "secondary-btn";
-      btn.textContent = `Recruter (${formatEuro(presenter.signingBonus)})`;
-      btn.addEventListener("click", () => {
-        if (!presenterEngine || typeof presenterEngine.hirePresenterForCurrentSession !== "function") {
-          setFeedback("Module présentateurs indisponible.", "error");
-          return;
-        }
-        const result = presenterEngine.hirePresenterForCurrentSession(presenter.id);
-        if (!result || !result.ok) {
-          setFeedback((result && result.message) || "Recrutement impossible.", "error");
-          return;
-        }
-        setFeedback(result.message || "Présentateur recruté.", "success");
-        renderAll();
+    const tabs = roles.map((role) => {
+      const count = getMarket(role.id).length;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `market-tab ${state.role === role.id ? "active" : ""}`.trim();
+      button.textContent = `${role.label} (${count})`;
+      button.addEventListener("click", () => {
+        state.role = role.id;
+        state.specialty = "all";
+        state.search = "";
+        renderPage();
       });
-      actionWrap.appendChild(btn);
-    }
-
-    row.append(main, actionWrap);
-    return row;
-  }
-
-  function renderSpecialties() {
-    const select = document.getElementById("presentersSpecialtySelect");
-    if (!select) return;
-    const market = getMarket();
-    const specialties = Array.from(new Set(market.map((item) => String(item.specialty || "").trim()).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
-
-    const current = state.specialty;
-    select.innerHTML = '<option value="all">Toutes les spécialités</option>';
-    specialties.forEach((specialty) => {
-      const option = document.createElement("option");
-      option.value = specialty;
-      option.textContent = specialty;
-      select.appendChild(option);
+      return button;
     });
-    select.value = specialties.includes(current) || current === "all" ? current : "all";
-    state.specialty = select.value;
+
+    host.replaceChildren(...tabs);
   }
 
-  function renderMarket() {
-    const wrap = document.getElementById("presentersMarketList");
-    const count = document.getElementById("presentersMarketCount");
-    if (!wrap || !count) return;
-    const search = String(state.search || "").trim().toLowerCase();
-    const specialty = String(state.specialty || "all");
+  function buildToolbar(rows) {
+    const roleMeta = getRoleMeta(state.role);
+    const block = document.createElement("section");
+    block.className = "game-block owned-toolbar-block market-toolbar-block";
 
-    const rows = getMarket()
-      .filter((presenter) => {
-        if (specialty !== "all" && String(presenter.specialty || "") !== specialty) return false;
-        if (!search) return true;
-        const hay = `${presenter.fullName || ""} ${presenter.specialty || ""}`.toLowerCase();
-        return hay.includes(search);
-      })
-      .sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || ""), "fr", { sensitivity: "base" }));
+    const top = document.createElement("div");
+    top.className = "owned-toolbar-top";
 
-    count.textContent = String(rows.length);
-
-    if (!rows.length) {
-      const empty = document.createElement("p");
-      empty.className = "studio-presenter-empty";
-      empty.textContent = "Aucun profil pour ce filtre.";
-      wrap.replaceChildren(empty);
-      return;
-    }
-
-    wrap.replaceChildren(...rows.map((presenter) => presenterRow(presenter, { mode: "market" })));
-  }
-
-  function bindToolbar() {
-    const searchInput = document.getElementById("presentersSearchInput");
-    const specialtySelect = document.getElementById("presentersSpecialtySelect");
-    if (!searchInput || !specialtySelect) return;
-
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.placeholder = `Rechercher un ${String(roleMeta.singular || "profil").toLowerCase()}...`;
+    searchInput.value = state.search;
     searchInput.addEventListener("input", () => {
       state.search = searchInput.value || "";
-      renderMarket();
+      renderPage();
     });
-    specialtySelect.addEventListener("change", () => {
-      state.specialty = specialtySelect.value || "all";
-      renderMarket();
+
+    const sortSelect = document.createElement("select");
+    [
+      { value: "name", label: "Trier: Nom" },
+      { value: "salary", label: "Trier: Salaire" },
+      { value: "impact", label: "Trier: Impact" },
+      { value: "bonus", label: "Trier: Prime" }
+    ].forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      sortSelect.appendChild(option);
     });
+    sortSelect.value = state.sortBy;
+    sortSelect.addEventListener("change", () => {
+      state.sortBy = sortSelect.value || "name";
+      renderPage();
+    });
+
+    const orderBtn = document.createElement("button");
+    orderBtn.type = "button";
+    orderBtn.className = "secondary-btn";
+    orderBtn.textContent = state.asc ? "Ordre: A-Z" : "Ordre: Z-A";
+    orderBtn.addEventListener("click", () => {
+      state.asc = !state.asc;
+      renderPage();
+    });
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "secondary-btn";
+    resetBtn.textContent = "Réinitialiser";
+    resetBtn.addEventListener("click", () => {
+      state.search = "";
+      state.specialty = "all";
+      state.sortBy = "name";
+      state.asc = true;
+      renderPage();
+    });
+
+    top.append(searchInput, sortSelect, orderBtn, resetBtn);
+
+    const filters = document.createElement("div");
+    filters.className = "owned-filters-grid";
+
+    const specialtyWrap = document.createElement("div");
+    const specialtyTitle = document.createElement("strong");
+    specialtyTitle.textContent = "Spécialité";
+    const specialtyChips = document.createElement("div");
+    specialtyChips.className = "filter-chip-row";
+    const specialties = Array.from(new Set(rows.map((item) => String(item.specialty || "").trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+
+    const allChip = document.createElement("button");
+    allChip.type = "button";
+    allChip.className = `filter-chip ${state.specialty === "all" ? "active" : ""}`.trim();
+    allChip.textContent = "Toutes";
+    allChip.addEventListener("click", () => {
+      state.specialty = "all";
+      renderPage();
+    });
+    specialtyChips.appendChild(allChip);
+
+    specialties.forEach((specialty) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = `filter-chip ${state.specialty === specialty ? "active" : ""}`.trim();
+      chip.textContent = specialty;
+      chip.addEventListener("click", () => {
+        state.specialty = specialty;
+        renderPage();
+      });
+      specialtyChips.appendChild(chip);
+    });
+
+    specialtyWrap.append(specialtyTitle, specialtyChips);
+
+    const infoWrap = document.createElement("div");
+    const infoTitle = document.createElement("strong");
+    infoTitle.textContent = roleMeta.label;
+    const infoText = document.createElement("div");
+    infoText.className = "summary-strip";
+    infoText.textContent = `${rows.length} profil(s) disponible(s)`;
+    infoWrap.append(infoTitle, infoText);
+
+    filters.append(specialtyWrap, infoWrap);
+    block.append(top, filters);
+    return block;
   }
 
-  function renderAll() {
-    renderSpecialties();
-    renderMarket();
+  function buildRecruitTable(rows) {
+    const roleMeta = getRoleMeta(state.role);
+    const section = document.createElement("section");
+    section.className = "game-block market-list-fixed";
+
+    const wrap = document.createElement("div");
+    wrap.className = "owned-table-wrap";
+
+    const table = document.createElement("table");
+    table.className = "owned-table";
+
+    const head = document.createElement("thead");
+    const hRow = document.createElement("tr");
+    ["Profil", "Spécialité", "Édito", "Charisme", "Notoriété", "Impact", "Salaire", "Prime", "Action"]
+      .forEach((label) => {
+        const th = document.createElement("th");
+        th.textContent = label;
+        hRow.appendChild(th);
+      });
+    head.appendChild(hRow);
+
+    const body = document.createElement("tbody");
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 9;
+      td.textContent = `Aucun ${String(roleMeta.singular || "profil").toLowerCase()} disponible pour ce filtre.`;
+      tr.appendChild(td);
+      body.appendChild(tr);
+    } else {
+      rows.forEach((item) => {
+        const tr = document.createElement("tr");
+
+        const nameTd = document.createElement("td");
+        nameTd.textContent = item.fullName || "-";
+
+        const specTd = document.createElement("td");
+        specTd.textContent = item.specialty || "-";
+
+        const editoTd = document.createElement("td");
+        editoTd.textContent = String(Math.max(0, Number(item.editorial) || 0));
+
+        const charismaTd = document.createElement("td");
+        charismaTd.textContent = String(Math.max(0, Number(item.charisma) || 0));
+
+        const notorietyTd = document.createElement("td");
+        notorietyTd.textContent = String(Math.max(0, Number(item.notoriety) || 0));
+
+        const impactTd = document.createElement("td");
+        impactTd.textContent = formatStarBonusLabel(item.starBonus);
+
+        const salaryTd = document.createElement("td");
+        salaryTd.textContent = `${formatEuro(item.salaryMonthly || 0)} / mois`;
+
+        const bonusTd = document.createElement("td");
+        bonusTd.textContent = formatEuro(item.signingBonus || 0);
+
+        const actionTd = document.createElement("td");
+        const recruitBtn = document.createElement("button");
+        recruitBtn.type = "button";
+        recruitBtn.className = "market-buy-btn";
+        recruitBtn.textContent = "Recruter";
+        recruitBtn.addEventListener("click", () => {
+          if (!presenterEngine || typeof presenterEngine.hireStaffForCurrentSession !== "function") {
+            setFeedback("Module recrutement indisponible.", "error");
+            return;
+          }
+          const result = presenterEngine.hireStaffForCurrentSession(state.role, item.id);
+          if (!result || !result.ok) {
+            setFeedback((result && result.message) || "Recrutement impossible.", "error");
+            return;
+          }
+          setFeedback(result.message || "Recrutement confirmé.", "success");
+          renderPage();
+        });
+        actionTd.appendChild(recruitBtn);
+
+        tr.append(nameTd, specTd, editoTd, charismaTd, notorietyTd, impactTd, salaryTd, bonusTd, actionTd);
+        body.appendChild(tr);
+      });
+    }
+
+    table.append(head, body);
+    wrap.appendChild(table);
+    section.appendChild(wrap);
+    return section;
   }
 
-  bindToolbar();
-  renderAll();
+  function getFilteredRows() {
+    const search = String(state.search || "").trim().toLowerCase();
+    const specialty = String(state.specialty || "all");
+    return getMarket(state.role)
+      .filter((item) => {
+        if (specialty !== "all" && String(item.specialty || "") !== specialty) return false;
+        if (!search) return true;
+        const haystack = `${item.fullName || ""} ${item.specialty || ""}`.toLowerCase();
+        return haystack.includes(search);
+      })
+      .sort(compareRows);
+  }
+
+  function renderPage() {
+    renderTabs();
+    const host = document.getElementById("staffRecruitContent");
+    if (!host) return;
+    const rows = getFilteredRows();
+    const toolbar = buildToolbar(getMarket(state.role));
+    const table = buildRecruitTable(rows);
+    host.replaceChildren(toolbar, table);
+  }
+
+  renderPage();
 
   window.addEventListener("tvmanager:cloud-sync", (event) => {
     const detail = event && event.detail ? event.detail : null;
     if (!detail || !detail.ok || detail.mode !== "pull") return;
-    renderAll();
+    renderPage();
   });
 })();

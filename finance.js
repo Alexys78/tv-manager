@@ -109,8 +109,10 @@
     amelioration_studio: "Amélioration studio TV",
     production_studio: "Mise en production studio TV",
     publication_grille: "Publication grille",
-    recrutement_presentateurs: "Recrutement présentateurs",
-    licenciement_presentateurs: "Licenciement présentateurs",
+    recrutement_presentateurs: "Recrutement",
+    recrutement_journalistes: "Recrutement",
+    licenciement_presentateurs: "Licenciement",
+    licenciement_journalistes: "Licenciement",
     salaires_fin_mois: "Salaires",
     maintenance_studio_fin_mois: "Maintenance studio TV",
     ajustement_admin: "Ajustement admin",
@@ -813,21 +815,40 @@
   function getPresentersSalaryBreakdown(sessionData) {
     const DAYS_PER_MONTH = 30;
     const parsed = readJson(presentersStorageKey(sessionData));
-    const hired = parsed && Array.isArray(parsed.hired) ? parsed.hired : [];
-    const rows = hired
-      .map((item) => {
-        const name = String(item && item.fullName ? item.fullName : "").trim();
-        const monthly = Math.max(
-          0,
-          Math.round(
-            Number(item && item.salaryMonthly) > 0
-              ? Number(item && item.salaryMonthly)
-              : Number(item && item.salaryDaily) || 0
-          )
-        );
-        const amount = Math.max(0, Math.round(monthly / DAYS_PER_MONTH));
-        if (!name || amount <= 0) return null;
-        return { role: "Présentateur", label: name, amount };
+    const roleLabel = (roleKey) => (roleKey === "journalists" ? "Journaliste" : "Présentateur");
+
+    const hiredGroups = [];
+    if (parsed && parsed.roles && typeof parsed.roles === "object") {
+      hiredGroups.push(
+        { role: "presenters", list: Array.isArray(parsed.roles.presenters && parsed.roles.presenters.hired) ? parsed.roles.presenters.hired : [] },
+        { role: "journalists", list: Array.isArray(parsed.roles.journalists && parsed.roles.journalists.hired) ? parsed.roles.journalists.hired : [] }
+      );
+    } else if (parsed && (parsed.presenters || parsed.journalists)) {
+      hiredGroups.push(
+        { role: "presenters", list: Array.isArray(parsed.presenters && parsed.presenters.hired) ? parsed.presenters.hired : [] },
+        { role: "journalists", list: Array.isArray(parsed.journalists && parsed.journalists.hired) ? parsed.journalists.hired : [] }
+      );
+    } else {
+      hiredGroups.push({ role: "presenters", list: parsed && Array.isArray(parsed.hired) ? parsed.hired : [] });
+    }
+
+    const rows = hiredGroups
+      .flatMap((group) => {
+        const list = Array.isArray(group.list) ? group.list : [];
+        return list.map((item) => {
+          const name = String(item && item.fullName ? item.fullName : "").trim();
+          const monthly = Math.max(
+            0,
+            Math.round(
+              Number(item && item.salaryMonthly) > 0
+                ? Number(item && item.salaryMonthly)
+                : Number(item && item.salaryDaily) || 0
+            )
+          );
+          const amount = Math.max(0, Math.round(monthly / DAYS_PER_MONTH));
+          if (!name || amount <= 0) return null;
+          return { role: roleLabel(group.role), label: name, amount };
+        });
       })
       .filter(Boolean);
     const total = rows.reduce((sum, row) => sum + row.amount, 0);
@@ -836,18 +857,34 @@
 
   function getPresentersMonthlySalaryTotal(sessionData) {
     const parsed = readJson(presentersStorageKey(sessionData));
-    const hired = parsed && Array.isArray(parsed.hired) ? parsed.hired : [];
-    return hired.reduce((sum, item) => {
-      const monthly = Math.max(
-        0,
-        Math.round(
-          Number(item && item.salaryMonthly) > 0
-            ? Number(item && item.salaryMonthly)
-            : (Number(item && item.salaryDaily) || 0) * 30
-        )
+    const groups = [];
+    if (parsed && parsed.roles && typeof parsed.roles === "object") {
+      groups.push(
+        Array.isArray(parsed.roles.presenters && parsed.roles.presenters.hired) ? parsed.roles.presenters.hired : [],
+        Array.isArray(parsed.roles.journalists && parsed.roles.journalists.hired) ? parsed.roles.journalists.hired : []
       );
-      return sum + monthly;
-    }, 0);
+    } else if (parsed && (parsed.presenters || parsed.journalists)) {
+      groups.push(
+        Array.isArray(parsed.presenters && parsed.presenters.hired) ? parsed.presenters.hired : [],
+        Array.isArray(parsed.journalists && parsed.journalists.hired) ? parsed.journalists.hired : []
+      );
+    } else {
+      groups.push(parsed && Array.isArray(parsed.hired) ? parsed.hired : []);
+    }
+
+    return groups
+      .flat()
+      .reduce((sum, item) => {
+        const monthly = Math.max(
+          0,
+          Math.round(
+            Number(item && item.salaryMonthly) > 0
+              ? Number(item && item.salaryMonthly)
+              : (Number(item && item.salaryDaily) || 0) * 30
+          )
+        );
+        return sum + monthly;
+      }, 0);
   }
 
   function getStudioProductionCostMultiplier(sessionData) {

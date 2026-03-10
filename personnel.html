@@ -13,29 +13,16 @@
       <header id="appHeader" data-active-page="personnel-owned"></header>
 
       <h1>Mon personnel</h1>
+      <p id="personnelFeedback" class="feedback" aria-live="polite"></p>
 
-      <section class="game-block">
-        <div class="today-head">
-          <h2>Présentateurs</h2>
-          <span id="personnelOwnedCount" class="day-badge">0</span>
-        </div>
-
-        <div class="presenters-toolbar">
-          <input id="personnelSearchInput" type="search" placeholder="Rechercher un présentateur..." />
-          <select id="personnelSpecialtySelect">
-            <option value="all">Toutes les spécialités</option>
-          </select>
-        </div>
-
-        <div id="personnelOwnedList" class="studio-presenters-list"></div>
-        <p id="personnelFeedback" class="feedback"></p>
-      </section>
+      <div id="staffOwnedTabs" class="market-tabs staff-role-tabs"></div>
+      <div id="staffOwnedContent" class="market-content"></div>
     </section>
   </main>
 
   <div id="firePresenterModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="firePresenterModalTitle">
     <article class="modal-card">
-      <h2 id="firePresenterModalTitle">Licencier un présentateur</h2>
+      <h2 id="firePresenterModalTitle">Licencier un membre du personnel</h2>
       <div id="firePresenterModalBody" class="modal-body-text"></div>
       <div class="modal-actions">
         <button id="cancelFirePresenterBtn" type="button" class="secondary-btn">Annuler</button>

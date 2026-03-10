@@ -81,6 +81,20 @@
     feedback.className = `feedback ${type}`;
   }
 
+  function asPromise(value) {
+    if (value && typeof value.then === "function") return value;
+    return Promise.resolve(value);
+  }
+
+  async function forceCloudPushSilently() {
+    if (!cloudSyncApi || typeof cloudSyncApi.forcePush !== "function") return;
+    try {
+      await cloudSyncApi.forcePush();
+    } catch {
+      // On conserve le succès local même si le push cloud échoue ponctuellement.
+    }
+  }
+
   function studioStateKey() {
     const playerId = session.email || session.username || "player";
     return `${STUDIO_KEY_PREFIX}${playerId}`;
@@ -373,16 +387,24 @@
     button.type = "button";
     button.className = "secondary-btn";
     button.textContent = `Régénérer ${category.name}`;
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       if (!programCatalog || typeof programCatalog.regenerateDynamicCategoryForCurrentSession !== "function") {
         setMarketFeedback("Module catalogue indisponible.", "error");
         return;
       }
-      const result = programCatalog.regenerateDynamicCategoryForCurrentSession(category.id);
+      let result = null;
+      try {
+        result = await asPromise(programCatalog.regenerateDynamicCategoryForCurrentSession(category.id));
+      } catch (error) {
+        const details = error && error.message ? error.message : "Erreur pendant la régénération.";
+        setMarketFeedback(details, "error");
+        return;
+      }
       if (!result || !result.ok) {
         setMarketFeedback(result && result.message ? result.message : "Régénération impossible.", "error");
         return;
       }
+      await forceCloudPushSilently();
       setMarketFeedback(`${result.categoryName} régénéré (${result.count} programmes générés).`, "success");
     });
     return button;
@@ -409,16 +431,39 @@
     button.type = "button";
     button.className = "secondary-btn";
     button.textContent = item.label;
-    button.addEventListener("click", () => {
-      if (!presenterEngine || typeof presenterEngine.regenerateMarketForCurrentSession !== "function") {
+    button.addEventListener("click", async () => {
+      if (!presenterEngine) {
         setRecruitmentFeedback("Module recrutement indisponible.", "error");
         return;
       }
-      const result = presenterEngine.regenerateMarketForCurrentSession({ force: true });
+      let result = null;
+      try {
+        if (typeof presenterEngine.regenerateRoleMarketForCurrentSession === "function") {
+          result = await asPromise(presenterEngine.regenerateRoleMarketForCurrentSession(item.id, { force: true }));
+        } else if (
+          item.id === "presenters"
+          && typeof presenterEngine.regeneratePresentersMarketForCurrentSession === "function"
+        ) {
+          result = await asPromise(presenterEngine.regeneratePresentersMarketForCurrentSession({ force: true }));
+        } else if (
+          item.id === "journalists"
+          && typeof presenterEngine.regenerateJournalistsMarketForCurrentSession === "function"
+        ) {
+          result = await asPromise(presenterEngine.regenerateJournalistsMarketForCurrentSession({ force: true }));
+        } else if (typeof presenterEngine.regenerateMarketForCurrentSession === "function") {
+          result = await asPromise(presenterEngine.regenerateMarketForCurrentSession({ force: true }));
+        }
+      } catch (error) {
+        const details = error && error.message ? error.message : "Erreur pendant le renouvellement.";
+        setRecruitmentFeedback(details, "error");
+        return;
+      }
+
       if (!result || !result.ok) {
         setRecruitmentFeedback(result && result.message ? result.message : "Renouvellement impossible.", "error");
         return;
       }
+      await forceCloudPushSilently();
       setRecruitmentFeedback(`${item.successLabel} (${result.count || 0} profils disponibles).`, "success");
     });
     return button;
@@ -428,7 +473,8 @@
     const wrap = document.getElementById("recruitmentRegenerateButtons");
     if (!wrap) return;
     const items = [
-      { id: "presenters", label: "Renouveler Présentateurs", successLabel: "Casting présentateurs renouvelé" }
+      { id: "presenters", label: "Renouveler Présentateurs", successLabel: "Casting présentateurs renouvelé" },
+      { id: "journalists", label: "Renouveler Journalistes", successLabel: "Casting journalistes renouvelé" }
     ];
     const buttons = items.map((item) => createRecruitmentRegenerateButton(item));
     wrap.replaceChildren(...buttons);
@@ -436,34 +482,55 @@
 
   const regenerateAllMarketsBtn = document.getElementById("regenerateAllMarketsBtn");
   if (regenerateAllMarketsBtn) {
-    regenerateAllMarketsBtn.addEventListener("click", () => {
+    regenerateAllMarketsBtn.addEventListener("click", async () => {
       if (!programCatalog || typeof programCatalog.regenerateAllDynamicCategoriesForCurrentSession !== "function") {
         setMarketFeedback("Module catalogue indisponible.", "error");
         return;
       }
-      const result = programCatalog.regenerateAllDynamicCategoriesForCurrentSession();
+      let result = null;
+      try {
+        result = await asPromise(programCatalog.regenerateAllDynamicCategoriesForCurrentSession());
+      } catch (error) {
+        const details = error && error.message ? error.message : "Erreur pendant la régénération globale.";
+        setMarketFeedback(details, "error");
+        return;
+      }
       if (!result || !result.ok) {
         setMarketFeedback(result && result.message ? result.message : "Régénération globale impossible.", "error");
         return;
       }
+      await forceCloudPushSilently();
       setMarketFeedback(`Marchés régénérés (${result.total} programmes générés au total).`, "success");
     });
   }
 
   const regenerateAllRecruitmentBtn = document.getElementById("regenerateAllRecruitmentBtn");
   if (regenerateAllRecruitmentBtn) {
-    regenerateAllRecruitmentBtn.addEventListener("click", () => {
-      if (!presenterEngine || typeof presenterEngine.regenerateMarketForCurrentSession !== "function") {
+    regenerateAllRecruitmentBtn.addEventListener("click", async () => {
+      if (!presenterEngine) {
         setRecruitmentFeedback("Module recrutement indisponible.", "error");
         return;
       }
-      const result = presenterEngine.regenerateMarketForCurrentSession({ force: true });
+      let result = null;
+      try {
+        if (typeof presenterEngine.regenerateAllMarketsForCurrentSession === "function") {
+          result = await asPromise(presenterEngine.regenerateAllMarketsForCurrentSession({ force: true }));
+        } else if (typeof presenterEngine.regenerateMarketForCurrentSession === "function") {
+          result = await asPromise(presenterEngine.regenerateMarketForCurrentSession({ force: true }));
+        }
+      } catch (error) {
+        const details = error && error.message ? error.message : "Erreur pendant le renouvellement global.";
+        setRecruitmentFeedback(details, "error");
+        return;
+      }
+
       if (!result || !result.ok) {
         setRecruitmentFeedback(result && result.message ? result.message : "Renouvellement global impossible.", "error");
         return;
       }
+      await forceCloudPushSilently();
       setRecruitmentFeedback(
-        `Recrutement global renouvelé (présentateurs pour le moment) (${result.count || 0} profils disponibles).`,
+        `Recrutement global renouvelé (${result.count || 0} profils disponibles).`,
         "success"
       );
     });
@@ -475,18 +542,16 @@
       try {
         if (coreApi && typeof coreApi.createLocalStoreForCurrentPlayer === "function") {
           const localStore = coreApi.createLocalStoreForCurrentPlayer();
-          await localStore.init(["studio_state"]);
+          await localStore.init(["studio_state", studioStateKey()]);
           await localStore.set("studio_state", {});
+          await localStore.set(studioStateKey(), {});
         } else {
+          localStorage.removeItem("studio_state");
           localStorage.removeItem(studioStateKey());
         }
-        if (cloudSyncApi && typeof cloudSyncApi.forcePush === "function") {
-          try {
-            await cloudSyncApi.forcePush();
-          } catch {
-            // L'état local est bien réinitialisé même si le push échoue.
-          }
-        }
+        localStorage.removeItem("studio_state");
+        localStorage.removeItem(studioStateKey());
+        await forceCloudPushSilently();
         setStudioFeedback("Options du studio réinitialisées.", "success");
       } catch {
         setStudioFeedback("Impossible de réinitialiser le studio.", "error");

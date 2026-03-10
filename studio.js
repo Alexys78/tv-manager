@@ -1550,11 +1550,11 @@
       addDetailRow("Fin de récurrence", entry.recurrenceEndDate ? formatDateLabel(entry.recurrenceEndDate) : "Aucune");
     }
     addDetailRow("Classification", ratingLabel);
-    addDetailRow("Présentateur(s)", getEntryPresenterDisplayName(entry));
+    addDetailRow("Journaliste(s)", getEntryPresenterDisplayName(entry));
     addDetailRow("Studio TV", String(entry.studioName || "Studio TV 1"));
     addDetailRow(
       "Plateau",
-      `${Math.max(1, Number(entry.presentersCount) || 1)} présentateur(s), ${Math.max(0, Number(entry.guestsCount) || 0)} invité(s), max ${Math.max(1, Number(entry.maxPeopleOnSet) || 3)}`
+      `${Math.max(1, Number(entry.presentersCount) || 1)} journaliste(s), ${Math.max(0, Number(entry.guestsCount) || 0)} invité(s), max ${Math.max(1, Number(entry.maxPeopleOnSet) || 3)}`
     );
     addDetailRow("Impact étoiles", formatStarBonusLabel(entry.presenterStarBonus));
 
@@ -1759,7 +1759,7 @@
     if (!select) return;
     const presenters = listOwnedPresenters();
     if (!Array.isArray(presenters) || presenters.length === 0) {
-      select.innerHTML = '<option value="">Aucun présentateur recruté</option>';
+      select.innerHTML = '<option value="">Aucun journaliste recruté</option>';
       select.value = "";
       return;
     }
@@ -1786,7 +1786,7 @@
     if (!owned.length) {
       const empty = document.createElement("p");
       empty.className = "studio-presenter-empty";
-      empty.textContent = "Aucun présentateur en CDI. Recrute dans le casting pour lancer des productions.";
+      empty.textContent = "Aucun journaliste en CDI. Recrute dans le casting pour lancer des productions.";
       ownedWrap.replaceChildren(empty);
     } else {
       const rows = owned.map((presenter) => {
@@ -1982,7 +1982,7 @@
         return;
       }
       if (!presenterId || !presenter) {
-        setProductionFeedback("Sélectionne un présentateur en CDI pour lancer cette production.", "error");
+        setProductionFeedback("Sélectionne un journaliste en CDI pour lancer cette production.", "error");
         return;
       }
       nameInput.value = title;

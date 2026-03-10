@@ -379,7 +379,7 @@
       });
 
       if (workdays.size > 5) {
-        const name = presenterNamesById[presenterId] || "Présentateur";
+        const name = presenterNamesById[presenterId] || "Journaliste";
         return {
           ok: false,
           message: `${name} dépasse la limite de 5 jours d'antenne par semaine.`
@@ -554,8 +554,17 @@
   }
 
   function listOwnedPresenters() {
-    if (!presenterEngine || typeof presenterEngine.getOwnedPresentersForCurrentSession !== "function") return [];
-    return presenterEngine.getOwnedPresentersForCurrentSession();
+    if (!presenterEngine) return [];
+    if (typeof presenterEngine.getOwnedJournalistsForCurrentSession === "function") {
+      return presenterEngine.getOwnedJournalistsForCurrentSession();
+    }
+    if (typeof presenterEngine.getOwnedStaffByRoleForCurrentSession === "function") {
+      return presenterEngine.getOwnedStaffByRoleForCurrentSession("journalists");
+    }
+    if (typeof presenterEngine.getOwnedPresentersForCurrentSession === "function") {
+      return presenterEngine.getOwnedPresentersForCurrentSession();
+    }
+    return [];
   }
 
   function normalizeToken(value) {
@@ -843,7 +852,7 @@
     if (!capacityHelp) return;
     const studio = getSelectedStudio();
     const capacity = getCurrentSetCapacity();
-    capacityHelp.textContent = `Limite ${studio.name}: ${capacity} personnes max sur le plateau (présentateurs + invités). Chaque présentateur est limité à 5 jours d'antenne par semaine. Les étoiles viennent du studio TV (max 3) + du niveau des présentateurs (max 2). Avec plusieurs présentateurs, le bonus étoiles est accordé seulement si tous atteignent le niveau requis.`;
+    capacityHelp.textContent = `Limite ${studio.name}: ${capacity} personnes max sur le plateau (journalistes + invités). Chaque journaliste est limité à 5 jours d'antenne par semaine. Les étoiles viennent du studio TV (max 3) + du niveau des journalistes (max 2). Avec plusieurs journalistes, le bonus étoiles est accordé seulement si tous atteignent le niveau requis.`;
   }
 
   function getSelectedRecurringDays() {
@@ -942,7 +951,7 @@
   }
 
   function presenterSlotLabel(index) {
-    return index === 0 ? "Présentateur" : `Co-présentateur ${index}`;
+    return index === 0 ? "Journaliste" : `Co-journaliste ${index}`;
   }
 
   function buildPresenterSelect(index, selectedId, presenters) {
@@ -981,7 +990,7 @@
     const presenters = listOwnedPresenters();
     const count = Math.max(1, Number(presentersCountSelect.value) || 1);
     if (presenters.length === 0) {
-      presentersWrap.innerHTML = '<p class="studio-presenter-empty">Aucun présentateur recruté. Recrute dans Personnels &gt; Recrutement.</p>';
+      presentersWrap.innerHTML = '<p class="studio-presenter-empty">Aucun journaliste recruté. Recrute dans Personnels &gt; Recrutement.</p>';
       return;
     }
     const previous = getSelectedPresenterIds();
@@ -996,15 +1005,15 @@
     const selectedIds = getSelectedPresenterIds();
     const expected = Math.max(1, Number(presentersCountSelect.value) || 1);
     if (selectedIds.length !== expected) {
-      return { ok: false, message: "Sélectionne tous les présentateurs requis." };
+      return { ok: false, message: "Sélectionne tous les journalistes requis." };
     }
     const uniqueIds = Array.from(new Set(selectedIds));
     if (uniqueIds.length !== selectedIds.length) {
-      return { ok: false, message: "Un présentateur ne peut être sélectionné qu'une seule fois sur le même programme." };
+      return { ok: false, message: "Un journaliste ne peut être sélectionné qu'une seule fois sur le même programme." };
     }
     const selected = uniqueIds.map((id) => presentersMap[id]).filter(Boolean);
     if (selected.length !== expected) {
-      return { ok: false, message: "Sélection de présentateur invalide." };
+      return { ok: false, message: "Sélection de journaliste invalide." };
     }
     return { ok: true, selectedIds: uniqueIds, selected };
   }

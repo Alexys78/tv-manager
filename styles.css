@@ -1874,6 +1874,11 @@ a {
   gap: 0.45rem;
 }
 
+.staff-role-tabs {
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  max-width: 560px;
+}
+
 .market-tab {
   margin-top: 0;
   min-height: var(--control-height);

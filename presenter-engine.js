@@ -5,21 +5,67 @@
   const STUDIO_SCHEDULE_KEY_PREFIX = appKeys.STUDIO_SCHEDULE_KEY_PREFIX || "tv_manager_studio_schedule_";
   const bank = window.PlayerBank;
   const finance = window.FinanceEngine;
+
   const DAYS_PER_MONTH = 30;
   const MIN_MONTHLY_SALARY = 2600;
   const TERMINATION_COST_MONTHS = 1;
+  const MARKET_SIZE_PER_ROLE = 20;
   const WEEKDAY_LABELS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
-  const SPECIALTIES = ["JT", "Débat", "Éco", "Culture", "Société", "Matinale", "International", "Faits divers"];
+  const ROLE_CONFIG = Object.freeze({
+    presenters: {
+      id: "presenters",
+      label: "Présentateurs",
+      singular: "Présentateur",
+      singularLower: "présentateur",
+      idPrefix: "pr",
+      recruitCategory: "recrutement_presentateurs",
+      fireCategory: "licenciement_presentateurs",
+      specialties: ["JT", "Débat", "Éco", "Culture", "Société", "Matinale", "International", "Faits divers"]
+    },
+    journalists: {
+      id: "journalists",
+      label: "Journalistes",
+      singular: "Journaliste",
+      singularLower: "journaliste",
+      idPrefix: "jr",
+      recruitCategory: "recrutement_journalistes",
+      fireCategory: "licenciement_journalistes",
+      specialties: ["JT", "Météo", "Économie", "Politique", "Matinale", "International", "Faits divers", "Culture", "Santé", "Sport flash"]
+    }
+  });
+
+  const ROLE_KEYS = Object.freeze(Object.keys(ROLE_CONFIG));
 
   const FIRST_NAMES = [
     "Camille", "Nora", "Lina", "Maya", "Eva", "Sarah", "Lou", "Inès", "Zoé", "Manon",
-    "Lucas", "Noah", "Hugo", "Adam", "Léo", "Nolan", "Théo", "Ethan", "Tom", "Mathis"
+    "Lucas", "Noah", "Hugo", "Adam", "Léo", "Nolan", "Théo", "Ethan", "Tom", "Mathis",
+    "Emma", "Lola", "Jade", "Chloé", "Sofia", "Nina", "Anna", "Lisa", "Léa", "Clara",
+    "Arthur", "Gabriel", "Raphaël", "Louis", "Jules", "Nathan", "Antoine", "Paul", "Baptiste", "Maxime",
+    "Alicia", "Marine", "Jeanne", "Margot", "Juliette", "Alexia", "Océane", "Elsa", "Agathe", "Mélanie"
   ];
+
+  const ROLE_FIRST_NAMES = Object.freeze({
+    presenters: [
+      "Camille", "Nora", "Maya", "Sarah", "Inès", "Manon", "Emma", "Lola", "Jade", "Chloé",
+      "Sofia", "Nina", "Anna", "Léa", "Clara", "Arthur", "Gabriel", "Raphaël", "Louis", "Jules",
+      "Nathan", "Antoine", "Paul", "Baptiste", "Maxime", "Jeanne", "Margot", "Juliette", "Alexia", "Océane",
+      "Elsa", "Agathe", "Mélanie", "Lina", "Eva", "Lou", "Lucas", "Noah", "Hugo", "Tom"
+    ],
+    journalists: [
+      "Amina", "Clémence", "Siham", "Nawel", "Morgane", "Céline", "Héloïse", "Noémie", "Salomé", "Maëlys",
+      "Violette", "Suzanne", "Aurore", "Bérénice", "Élodie", "Marina", "Tiphaine", "Cassandra", "Sabrina", "Nadège",
+      "Idriss", "Yanis", "Karim", "Samir", "Rayan", "Sami", "Farès", "Nassim", "Anis", "Romain",
+      "Quentin", "Valentin", "Damien", "Florian", "Adrien", "Gaspard", "Aurélien", "Benoît", "Mathieu", "Kylian"
+    ]
+  });
 
   const LAST_NAMES = [
     "Martin", "Bernard", "Robert", "Dubois", "Morel", "Laurent", "Simon", "Michel", "Leroy", "Roux",
-    "Fournier", "Girard", "Bonnet", "Dupont", "Lambert", "Fontaine", "Rousseau", "Vincent", "Muller", "Faure"
+    "Fournier", "Girard", "Bonnet", "Dupont", "Lambert", "Fontaine", "Rousseau", "Vincent", "Muller", "Faure",
+    "Garcia", "David", "Bertrand", "Moreau", "Lefebvre", "Mercier", "Blanc", "Henry", "Renaud", "Schmitt",
+    "Garnier", "Chevalier", "Petit", "Lopez", "Perrin", "Marchand", "Meyer", "Renard", "Leclerc", "Boyer",
+    "Gauthier", "Masson", "Picard", "Morin", "Lemoine", "Caron", "Robin", "Noël", "Colin", "Aubry"
   ];
 
   function getSession() {
@@ -38,6 +84,29 @@
 
   function studioScheduleKey(sessionData) {
     return `${STUDIO_SCHEDULE_KEY_PREFIX}${getPlayerId(sessionData)}`;
+  }
+
+  function getRoleKey(role) {
+    const safe = String(role || "").trim();
+    if (ROLE_CONFIG[safe]) return safe;
+    return "presenters";
+  }
+
+  function getRoleConfig(role) {
+    return ROLE_CONFIG[getRoleKey(role)];
+  }
+
+  function emptyRoleBucket() {
+    return { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
+  }
+
+  function emptyStore() {
+    return {
+      roles: {
+        presenters: emptyRoleBucket(),
+        journalists: emptyRoleBucket()
+      }
+    };
   }
 
   function hashString(value) {
@@ -61,6 +130,39 @@
     };
   }
 
+  function uniqueList(items) {
+    const out = [];
+    const used = new Set();
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      const value = String(item || "").trim();
+      const key = value.toLowerCase();
+      if (!value || used.has(key)) return;
+      used.add(key);
+      out.push(value);
+    });
+    return out;
+  }
+
+  function buildFirstNamePoolForRole(role) {
+    const roleKey = getRoleKey(role);
+    const scoped = Array.isArray(ROLE_FIRST_NAMES[roleKey]) ? ROLE_FIRST_NAMES[roleKey] : [];
+    const merged = uniqueList([...scoped, ...FIRST_NAMES]);
+    return merged.length > 0 ? merged : FIRST_NAMES.slice();
+  }
+
+  function buildShuffledPool(list, seedBase) {
+    const source = Array.isArray(list) ? list.slice() : [];
+    if (source.length <= 1) return source;
+    const rand = seededRandom(hashString(String(seedBase || "shuffle")));
+    for (let i = source.length - 1; i > 0; i -= 1) {
+      const swapIndex = Math.floor(rand() * (i + 1));
+      const tmp = source[i];
+      source[i] = source[swapIndex];
+      source[swapIndex] = tmp;
+    }
+    return source;
+  }
+
   function toDateKey(date) {
     const safeDate = date instanceof Date ? date : new Date();
     const year = safeDate.getFullYear();
@@ -72,7 +174,7 @@
   function getWeeklyMarketRefreshAnchor(date) {
     const current = new Date(date);
     current.setHours(0, 0, 0, 0);
-    const weekday = current.getDay(); // 0=dimanche, 1=lundi
+    const weekday = current.getDay();
     const monday = new Date(current);
     monday.setDate(current.getDate() - ((weekday + 6) % 7));
     return monday;
@@ -92,12 +194,16 @@
     return 0;
   }
 
-  function sanitizePresenter(raw) {
+  function sanitizeTalent(raw, role) {
     if (!raw || typeof raw !== "object") return null;
+    const roleKey = getRoleKey(role || raw.role);
+    const roleConfig = getRoleConfig(roleKey);
     const id = String(raw.id || "").trim();
     const fullName = String(raw.fullName || "").trim();
     if (!id || !fullName) return null;
-    const specialty = String(raw.specialty || "JT").trim() || "JT";
+
+    const fallbackSpecialty = roleConfig.specialties[0] || "JT";
+    const specialty = String(raw.specialty || fallbackSpecialty).trim() || fallbackSpecialty;
     const editorial = Math.round(clamp(raw.editorial, 35, 98));
     const charisma = Math.round(clamp(raw.charisma, 35, 98));
     const notoriety = Math.round(clamp(raw.notoriety, 20, 98));
@@ -114,8 +220,10 @@
     const starBonus = Number.isFinite(Number(raw.starBonus))
       ? clamp(raw.starBonus, 0, 2)
       : computeStarBonusFromStats({ editorial, charisma, notoriety });
+
     return {
       id,
+      role: roleKey,
       fullName,
       specialty,
       editorial,
@@ -130,29 +238,58 @@
     };
   }
 
-  function sanitizeStore(raw) {
-    const base = { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
-    if (!raw || typeof raw !== "object") return base;
-    const hired = Array.isArray(raw.hired) ? raw.hired.map(sanitizePresenter).filter(Boolean) : [];
-    const market = Array.isArray(raw.market) ? raw.market.map(sanitizePresenter).filter(Boolean) : [];
-    const revision = Math.max(0, Math.floor(Number(raw.revision) || 0));
-    const lastRefreshAnchor = typeof raw.lastRefreshAnchor === "string" ? raw.lastRefreshAnchor : "";
+  function sanitizeRoleBucket(rawBucket, role) {
+    const bucket = rawBucket && typeof rawBucket === "object" ? rawBucket : {};
+    const hired = Array.isArray(bucket.hired) ? bucket.hired.map((item) => sanitizeTalent(item, role)).filter(Boolean) : [];
+    const market = Array.isArray(bucket.market) ? bucket.market.map((item) => sanitizeTalent(item, role)).filter(Boolean) : [];
+    const revision = Math.max(0, Math.floor(Number(bucket.revision) || 0));
+    const lastRefreshAnchor = typeof bucket.lastRefreshAnchor === "string" ? bucket.lastRefreshAnchor : "";
     return { hired, market, revision, lastRefreshAnchor };
   }
 
+  function sanitizeStore(raw) {
+    const base = emptyStore();
+    const source = raw && typeof raw === "object" ? raw : {};
+
+    if (source.roles && typeof source.roles === "object") {
+      ROLE_KEYS.forEach((roleKey) => {
+        base.roles[roleKey] = sanitizeRoleBucket(source.roles[roleKey], roleKey);
+      });
+      return base;
+    }
+
+    if (source.presenters || source.journalists) {
+      base.roles.presenters = sanitizeRoleBucket(source.presenters, "presenters");
+      base.roles.journalists = sanitizeRoleBucket(source.journalists, "journalists");
+      return base;
+    }
+
+    // Legacy format: top-level hired/market/revision/lastRefreshAnchor belonged to presenters.
+    base.roles.presenters = sanitizeRoleBucket(
+      {
+        hired: source.hired,
+        market: source.market,
+        revision: source.revision,
+        lastRefreshAnchor: source.lastRefreshAnchor
+      },
+      "presenters"
+    );
+    return base;
+  }
+
   function readStore(sessionData) {
-    if (!sessionData) return { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
+    if (!sessionData) return emptyStore();
     const raw = localStorage.getItem(presentersKey(sessionData));
-    if (!raw) return { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
+    if (!raw) return emptyStore();
     try {
       return sanitizeStore(JSON.parse(raw));
     } catch {
-      return { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
+      return emptyStore();
     }
   }
 
   function writeStore(sessionData, payload) {
-    if (!sessionData) return { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
+    if (!sessionData) return emptyStore();
     const clean = sanitizeStore(payload);
     localStorage.setItem(presentersKey(sessionData), JSON.stringify(clean));
     return clean;
@@ -168,19 +305,29 @@
     return !hasSyncedOnce && (status === "syncing" || status === "pending");
   }
 
-  function generatePresenter(playerId, index, revision) {
-    const rand = seededRandom(hashString(`${playerId}:presenter:${revision}:${index}`));
-    const firstName = FIRST_NAMES[Math.floor(rand() * FIRST_NAMES.length)];
-    const lastName = LAST_NAMES[Math.floor(rand() * LAST_NAMES.length)];
-    const specialty = SPECIALTIES[Math.floor(rand() * SPECIALTIES.length)];
+  function generateTalent(playerId, role, index, revision, salt, nameHint) {
+    const roleConfig = getRoleConfig(role);
+    const rand = seededRandom(hashString(`${playerId}:${role}:${revision}:${index}:${Number(salt) || 0}`));
+    const safeHint = nameHint && typeof nameHint === "object" ? nameHint : {};
+    const firstName = String(safeHint.firstName || "").trim()
+      || FIRST_NAMES[Math.floor(rand() * FIRST_NAMES.length)];
+    const lastName = String(safeHint.lastName || "").trim()
+      || LAST_NAMES[Math.floor(rand() * LAST_NAMES.length)];
+    const specialtyList = Array.isArray(roleConfig.specialties) && roleConfig.specialties.length > 0
+      ? roleConfig.specialties
+      : ["JT"];
+    const specialty = specialtyList[Math.floor(rand() * specialtyList.length)];
+
     const editorial = Math.round(48 + (rand() * 44));
     const charisma = Math.round(45 + (rand() * 46));
     const notoriety = Math.round(28 + (rand() * 58));
     const starBonus = computeStarBonusFromStats({ editorial, charisma, notoriety });
     const salaryMonthly = Math.round(2600 + (editorial * 42) + (charisma * 33) + (notoriety * 36));
     const signingBonus = Math.round(salaryMonthly * (2 + (rand() * 2.5)));
-    return sanitizePresenter({
-      id: `pr_${revision}_${index}_${hashString(`${firstName}${lastName}${specialty}`).toString(36).slice(0, 5)}`,
+
+    return sanitizeTalent({
+      id: `${roleConfig.idPrefix}_${revision}_${index}_${hashString(`${firstName}${lastName}${specialty}_${Number(salt) || 0}`).toString(36).slice(0, 6)}`,
+      role,
       fullName: `${firstName} ${lastName}`,
       specialty,
       editorial,
@@ -190,134 +337,238 @@
       salaryMonthly,
       signingBonus,
       contractType: "CDI"
-    });
+    }, role);
   }
 
-  function generateMarket(playerId, revision) {
+  function generateMarket(playerId, role, revision) {
+    const firstNamePool = buildShuffledPool(
+      buildFirstNamePoolForRole(role),
+      `${playerId}:${role}:${revision}:first_names`
+    );
+    const lastNamePool = buildShuffledPool(
+      LAST_NAMES,
+      `${playerId}:${role}:${revision}:last_names`
+    );
     const list = [];
-    for (let i = 0; i < 8; i += 1) {
-      const presenter = generatePresenter(playerId, i, revision);
-      if (presenter) list.push(presenter);
+    const usedNames = new Set();
+    for (let i = 0; i < MARKET_SIZE_PER_ROLE; i += 1) {
+      let picked = null;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const firstName = firstNamePool[(i + attempt) % firstNamePool.length];
+        const lastName = lastNamePool[((i * 2) + attempt) % lastNamePool.length];
+        const candidate = generateTalent(playerId, role, i, revision, attempt, { firstName, lastName });
+        if (!candidate) continue;
+        const key = String(candidate.fullName || "").trim().toLowerCase();
+        if (!key || usedNames.has(key)) continue;
+        usedNames.add(key);
+        picked = candidate;
+        break;
+      }
+      if (!picked) {
+        const fallback = generateTalent(playerId, role, i, revision, 999 + i, {
+          firstName: firstNamePool[i % firstNamePool.length],
+          lastName: lastNamePool[i % lastNamePool.length]
+        });
+        if (fallback) {
+          let name = String(fallback.fullName || "").trim();
+          if (name && usedNames.has(name.toLowerCase())) {
+            name = `${name} ${i + 1}`;
+            fallback.fullName = name;
+          }
+          if (name) usedNames.add(name.toLowerCase());
+          picked = fallback;
+        }
+      }
+      if (picked) list.push(picked);
     }
     return list;
   }
 
   function ensureStore(sessionData) {
-    if (!sessionData) return { hired: [], market: [], revision: 0, lastRefreshAnchor: "" };
+    if (!sessionData) return emptyStore();
     const hasPersistedStore = localStorage.getItem(presentersKey(sessionData)) !== null;
     const current = readStore(sessionData);
     if (!hasPersistedStore && isCloudBootstrapInProgress()) {
-      // Avoid seeding defaults before cloud pull has a chance to restore real data.
       return current;
     }
+
     const refreshAnchor = getCurrentRefreshAnchorKey();
-    const hasMarket = Array.isArray(current.market) && current.market.length > 0;
-    const hasAnchor = Boolean(current.lastRefreshAnchor);
-    if (hasAnchor && current.lastRefreshAnchor !== refreshAnchor) {
-      const nextRevision = (current.revision || 0) + 1;
-      const refreshed = {
-        hired: Array.isArray(current.hired) ? current.hired : [],
-        market: generateMarket(getPlayerId(sessionData), nextRevision),
-        revision: nextRevision,
-        lastRefreshAnchor: refreshAnchor
-      };
-      return writeStore(sessionData, refreshed);
-    }
-    if (hasMarket) {
-      if (!hasAnchor) {
-        return writeStore(sessionData, {
-          ...current,
+    const next = sanitizeStore(current);
+    let changed = false;
+
+    ROLE_KEYS.forEach((roleKey) => {
+      const bucket = next.roles[roleKey] || emptyRoleBucket();
+      const hasMarket = Array.isArray(bucket.market) && bucket.market.length > 0;
+      const hasAnchor = Boolean(bucket.lastRefreshAnchor);
+
+      if (hasAnchor && bucket.lastRefreshAnchor !== refreshAnchor) {
+        const nextRevision = (bucket.revision || 0) + 1;
+        next.roles[roleKey] = {
+          hired: Array.isArray(bucket.hired) ? bucket.hired : [],
+          market: generateMarket(getPlayerId(sessionData), roleKey, nextRevision),
+          revision: nextRevision,
           lastRefreshAnchor: refreshAnchor
-        });
+        };
+        changed = true;
+        return;
       }
-      return current;
-    }
-    if (hasAnchor) return current;
-    const seeded = {
-      hired: Array.isArray(current.hired) ? current.hired : [],
-      market: generateMarket(getPlayerId(sessionData), current.revision || 0),
-      revision: current.revision || 0,
-      lastRefreshAnchor: refreshAnchor
-    };
-    return writeStore(sessionData, seeded);
+
+      if (hasMarket && !hasAnchor) {
+        next.roles[roleKey] = {
+          ...bucket,
+          lastRefreshAnchor: refreshAnchor
+        };
+        changed = true;
+        return;
+      }
+
+      if (!hasMarket && !hasAnchor) {
+        next.roles[roleKey] = {
+          hired: Array.isArray(bucket.hired) ? bucket.hired : [],
+          market: generateMarket(getPlayerId(sessionData), roleKey, bucket.revision || 0),
+          revision: bucket.revision || 0,
+          lastRefreshAnchor: refreshAnchor
+        };
+        changed = true;
+      }
+    });
+
+    if (!changed) return current;
+    return writeStore(sessionData, next);
   }
 
-  function regenerateMarket(sessionData, options) {
+  function getRoleBucket(store, role) {
+    const safeStore = sanitizeStore(store);
+    const roleKey = getRoleKey(role);
+    return safeStore.roles[roleKey] || emptyRoleBucket();
+  }
+
+  function getOwnedByRole(sessionData, role) {
+    const store = ensureStore(sessionData);
+    const bucket = getRoleBucket(store, role);
+    return bucket.hired.slice();
+  }
+
+  function getMarketByRole(sessionData, role) {
+    const store = ensureStore(sessionData);
+    const bucket = getRoleBucket(store, role);
+    const ownedIds = new Set((bucket.hired || []).map((item) => item.id));
+    return (bucket.market || []).filter((item) => !ownedIds.has(item.id));
+  }
+
+  function findOwnedByRole(sessionData, role, staffId) {
+    const id = String(staffId || "").trim();
+    if (!id) return null;
+    const owned = getOwnedByRole(sessionData, role);
+    return owned.find((item) => item.id === id) || null;
+  }
+
+  function getStarBonusByRole(sessionData, role, staffId) {
+    const item = findOwnedByRole(sessionData, role, staffId);
+    if (!item) return 0;
+    return clamp(Number(item.starBonus) || 0, 0, 2);
+  }
+
+  function visibleCountFromStored(store, role) {
+    const bucket = getRoleBucket(store, role);
+    const ownedIds = new Set((bucket.hired || []).map((item) => item.id));
+    return (bucket.market || []).filter((item) => !ownedIds.has(item.id)).length;
+  }
+
+  function regenerateRoleMarket(sessionData, role, options) {
     if (!sessionData) return { ok: false, message: "Session introuvable." };
+    const roleKey = getRoleKey(role);
+    const cfg = getRoleConfig(roleKey);
     const opts = options && typeof options === "object" ? options : {};
     const force = Boolean(opts.force);
+
     const current = readStore(sessionData);
+    const bucket = getRoleBucket(current, roleKey);
     const refreshAnchor = getCurrentRefreshAnchorKey();
-    const hasMarket = Array.isArray(current.market) && current.market.length > 0;
-    const hasAnchor = Boolean(current.lastRefreshAnchor);
-    const needsWeeklyRefresh = hasAnchor && current.lastRefreshAnchor !== refreshAnchor;
+    const hasMarket = Array.isArray(bucket.market) && bucket.market.length > 0;
+    const hasAnchor = Boolean(bucket.lastRefreshAnchor);
+    const needsWeeklyRefresh = hasAnchor && bucket.lastRefreshAnchor !== refreshAnchor;
     const needsSeed = !hasMarket;
 
     if (!force && !needsWeeklyRefresh && !needsSeed) {
-      const visibleCount = getMarketPresenters(sessionData).length;
       return {
         ok: true,
+        role: roleKey,
         refreshed: false,
-        count: visibleCount,
-        message: "Casting déjà à jour pour cette semaine."
+        count: getMarketByRole(sessionData, roleKey).length,
+        message: `${cfg.label} déjà à jour pour cette semaine.`
       };
     }
 
     const shouldIncrementRevision = force || needsWeeklyRefresh;
-    const nextRevision = Math.max(0, Math.floor(Number(current.revision) || 0)) + (shouldIncrementRevision ? 1 : 0);
-    const next = {
-      hired: Array.isArray(current.hired) ? current.hired : [],
-      market: generateMarket(getPlayerId(sessionData), nextRevision),
+    const nextRevision = Math.max(0, Math.floor(Number(bucket.revision) || 0)) + (shouldIncrementRevision ? 1 : 0);
+
+    const next = sanitizeStore(current);
+    next.roles[roleKey] = {
+      hired: Array.isArray(bucket.hired) ? bucket.hired : [],
+      market: generateMarket(getPlayerId(sessionData), roleKey, nextRevision),
       revision: nextRevision,
       lastRefreshAnchor: refreshAnchor
     };
+
     const stored = writeStore(sessionData, next);
-    const ownedIds = new Set((stored.hired || []).map((item) => item.id));
-    const visibleCount = (stored.market || []).filter((item) => !ownedIds.has(item.id)).length;
+    const count = visibleCountFromStored(stored, roleKey);
     return {
       ok: true,
+      role: roleKey,
       refreshed: true,
-      count: visibleCount,
+      count,
       revision: nextRevision,
       message: force
-        ? "Casting renouvelé (forcé)."
+        ? `${cfg.label} renouvelés (forcé).`
         : (needsWeeklyRefresh
-          ? "Casting renouvelé pour la nouvelle semaine."
-          : "Casting initialisé.")
+          ? `${cfg.label} renouvelés pour la nouvelle semaine.`
+          : `${cfg.label} initialisés.`)
     };
   }
 
-  function getOwnedPresenters(sessionData) {
-    return ensureStore(sessionData).hired.slice();
-  }
-
-  function getMarketPresenters(sessionData) {
-    const store = ensureStore(sessionData);
-    const ownedIds = new Set(store.hired.map((item) => item.id));
-    return store.market.filter((item) => !ownedIds.has(item.id));
-  }
-
-  function findOwnedPresenter(sessionData, presenterId) {
-    const id = String(presenterId || "").trim();
-    if (!id) return null;
-    const store = ensureStore(sessionData);
-    return store.hired.find((item) => item.id === id) || null;
-  }
-
-  function hirePresenter(sessionData, presenterId) {
-    const id = String(presenterId || "").trim();
-    if (!sessionData || !id) return { ok: false, message: "Présentateur invalide." };
-    const store = ensureStore(sessionData);
-    if (store.hired.some((item) => item.id === id)) {
-      return { ok: false, message: "Présentateur déjà en CDI." };
+  function regenerateAllMarkets(sessionData, options) {
+    if (!sessionData) return { ok: false, message: "Session introuvable." };
+    const results = ROLE_KEYS.map((roleKey) => regenerateRoleMarket(sessionData, roleKey, options));
+    const failed = results.find((item) => !item || !item.ok);
+    if (failed) {
+      return {
+        ok: false,
+        message: failed && failed.message ? failed.message : "Renouvellement impossible.",
+        results
+      };
     }
-    const target = store.market.find((item) => item.id === id);
+    const total = results.reduce((sum, item) => sum + (Number(item && item.count) || 0), 0);
+    return {
+      ok: true,
+      results,
+      total,
+      count: total,
+      message: `Casting renouvelé (${total} profils disponibles).`
+    };
+  }
+
+  function hireByRole(sessionData, role, staffId) {
+    const roleKey = getRoleKey(role);
+    const cfg = getRoleConfig(roleKey);
+    const id = String(staffId || "").trim();
+    if (!sessionData || !id) return { ok: false, message: `${cfg.singular} invalide.` };
+
+    const store = ensureStore(sessionData);
+    const bucket = getRoleBucket(store, roleKey);
+    if (bucket.hired.some((item) => item.id === id)) {
+      return { ok: false, message: `${cfg.singular} déjà en CDI.` };
+    }
+
+    const target = (bucket.market || []).find((item) => item.id === id);
     if (!target) {
-      return { ok: false, message: "Présentateur introuvable." };
+      return { ok: false, message: `${cfg.singular} introuvable.` };
     }
+
     if (!bank || typeof bank.getBalance !== "function" || typeof bank.add !== "function") {
       return { ok: false, message: "Module bancaire indisponible." };
     }
+
     const bonus = Math.max(0, Number(target.signingBonus) || 0);
     const balance = Number(bank.getBalance()) || 0;
     if (balance < bonus) {
@@ -328,46 +579,52 @@
     }
 
     bank.add(-bonus, {
-      category: "recrutement_presentateurs",
-      label: `Recrutement CDI: ${target.fullName}`
+      category: cfg.recruitCategory,
+      label: `Recrutement ${cfg.singular}: ${target.fullName}`
     });
+
     if (finance && typeof finance.recordTransaction === "function") {
       finance.recordTransaction(sessionData, {
         amount: -bonus,
-        category: "recrutement_presentateurs",
-        label: `Recrutement CDI: ${target.fullName}`
+        category: cfg.recruitCategory,
+        label: `Recrutement ${cfg.singular}: ${target.fullName}`
       });
     }
 
-    const hiredPresenter = {
+    const hired = {
       ...target,
+      role: roleKey,
       hiredAt: new Date().toISOString(),
       contractType: "CDI"
     };
-    const next = {
-      ...store,
-      hired: [...store.hired, hiredPresenter],
-      market: store.market.filter((item) => item.id !== id)
+
+    const next = sanitizeStore(store);
+    const nextBucket = getRoleBucket(next, roleKey);
+    next.roles[roleKey] = {
+      ...nextBucket,
+      hired: [...(nextBucket.hired || []), hired],
+      market: (nextBucket.market || []).filter((item) => item.id !== id)
     };
     writeStore(sessionData, next);
-    return { ok: true, presenter: hiredPresenter, message: `${target.fullName} rejoint l'équipe en CDI.` };
+
+    return { ok: true, role: roleKey, staff: hired, message: `${target.fullName} rejoint l'équipe en CDI.` };
   }
 
   function getSalaryBreakdown(sessionData) {
-    const hired = getOwnedPresenters(sessionData);
-    const rows = hired.map((presenter) => ({
-      role: "Présentateur",
-      name: presenter.fullName,
-      amount: Math.max(0, Math.round((Number(presenter.salaryMonthly) || 0) / DAYS_PER_MONTH))
-    }));
+    const rows = [];
+    ROLE_KEYS.forEach((roleKey) => {
+      const cfg = getRoleConfig(roleKey);
+      const hired = getOwnedByRole(sessionData, roleKey);
+      hired.forEach((item) => {
+        rows.push({
+          role: cfg.singular,
+          name: item.fullName,
+          amount: Math.max(0, Math.round((Number(item.salaryMonthly) || 0) / DAYS_PER_MONTH))
+        });
+      });
+    });
     const total = rows.reduce((sum, row) => sum + row.amount, 0);
     return { rows, total };
-  }
-
-  function getPresenterStarBonus(sessionData, presenterId) {
-    const presenter = findOwnedPresenter(sessionData, presenterId);
-    if (!presenter) return 0;
-    return clamp(Number(presenter.starBonus) || 0, 0, 2);
   }
 
   function readStudioSchedule(sessionData) {
@@ -382,7 +639,7 @@
     }
   }
 
-  function entryPresenterIds(entry) {
+  function entryStaffIds(entry) {
     if (!entry || typeof entry !== "object") return [];
     const ids = Array.isArray(entry.presenterIds)
       ? entry.presenterIds.map((item) => String(item || "").trim()).filter(Boolean)
@@ -448,12 +705,12 @@
     return `${title} · Récurrent (${days || "-"}) · ${start}`;
   }
 
-  function listActivePresenterAssignments(sessionData, presenterId) {
-    const id = String(presenterId || "").trim();
+  function listActiveAssignmentsByStaff(sessionData, staffId) {
+    const id = String(staffId || "").trim();
     if (!sessionData || !id) return [];
     const todayKey = toDateKey(new Date());
     return readStudioSchedule(sessionData)
-      .filter((entry) => entryPresenterIds(entry).includes(id))
+      .filter((entry) => entryStaffIds(entry).includes(id))
       .filter((entry) => isActiveAssignment(entry, todayKey))
       .map((entry) => ({
         id: String(entry && entry.id ? entry.id : ""),
@@ -461,35 +718,38 @@
       }));
   }
 
-  function getTerminationCost(presenter) {
-    if (!presenter || typeof presenter !== "object") return 0;
+  function getTerminationCost(staff) {
+    if (!staff || typeof staff !== "object") return 0;
     const monthly = Math.max(
       MIN_MONTHLY_SALARY,
-      Math.round(Number(presenter.salaryMonthly) || Math.round((Number(presenter.salaryDaily) || 0) * DAYS_PER_MONTH))
+      Math.round(Number(staff.salaryMonthly) || Math.round((Number(staff.salaryDaily) || 0) * DAYS_PER_MONTH))
     );
     return Math.max(0, Math.round(monthly * TERMINATION_COST_MONTHS));
   }
 
-  function getTerminationStatus(sessionData, presenterId) {
-    const presenter = findOwnedPresenter(sessionData, presenterId);
-    if (!sessionData || !presenter) {
+  function getTerminationStatusByRole(sessionData, role, staffId) {
+    const roleKey = getRoleKey(role);
+    const cfg = getRoleConfig(roleKey);
+    const staff = findOwnedByRole(sessionData, roleKey, staffId);
+    if (!sessionData || !staff) {
       return {
         ok: false,
         code: "not_found",
-        message: "Présentateur introuvable."
+        message: `${cfg.singular} introuvable.`
       };
     }
 
-    const assignments = listActivePresenterAssignments(sessionData, presenterId);
-    const cost = getTerminationCost(presenter);
+    const assignments = listActiveAssignmentsByStaff(sessionData, staffId);
+    const cost = getTerminationCost(staff);
     if (assignments.length > 0) {
       return {
         ok: false,
         code: "assigned",
-        presenter,
+        staff,
+        role: roleKey,
         cost,
         assignments,
-        message: "Licenciement impossible: ce présentateur est affecté à un programme."
+        message: `Licenciement impossible: ce ${cfg.singularLower} est affecté à un programme.`
       };
     }
 
@@ -497,7 +757,8 @@
       return {
         ok: false,
         code: "bank_unavailable",
-        presenter,
+        staff,
+        role: roleKey,
         cost,
         message: "Module bancaire indisponible."
       };
@@ -508,7 +769,8 @@
       return {
         ok: false,
         code: "insufficient_funds",
-        presenter,
+        staff,
+        role: roleKey,
         cost,
         missing: Math.max(0, cost - balance),
         message: "Fonds insuffisants pour payer les frais de licenciement."
@@ -518,98 +780,211 @@
     return {
       ok: true,
       code: "ok",
-      presenter,
+      staff,
+      role: roleKey,
       cost,
       assignments: []
     };
   }
 
-  function firePresenter(sessionData, presenterId) {
-    const status = getTerminationStatus(sessionData, presenterId);
+  function fireByRole(sessionData, role, staffId) {
+    const roleKey = getRoleKey(role);
+    const cfg = getRoleConfig(roleKey);
+    const status = getTerminationStatusByRole(sessionData, roleKey, staffId);
     if (!status.ok) return status;
-    const id = String(presenterId || "").trim();
+
+    const id = String(staffId || "").trim();
     const store = ensureStore(sessionData);
-    if (!store.hired.some((item) => item.id === id)) {
-      return { ok: false, code: "not_found", message: "Présentateur introuvable." };
+    const bucket = getRoleBucket(store, roleKey);
+    if (!(bucket.hired || []).some((item) => item.id === id)) {
+      return { ok: false, code: "not_found", message: `${cfg.singular} introuvable.` };
     }
 
     const cost = Math.max(0, Math.round(Number(status.cost) || 0));
-    const presenterName = String((status.presenter && status.presenter.fullName) || "Présentateur");
+    const staffName = String((status.staff && status.staff.fullName) || cfg.singular);
 
     if (cost > 0) {
       bank.add(-cost, {
-        category: "licenciement_presentateurs",
-        label: `Licenciement: ${presenterName}`
+        category: cfg.fireCategory,
+        label: `Licenciement ${cfg.singular}: ${staffName}`
       });
       if (finance && typeof finance.recordTransaction === "function") {
         finance.recordTransaction(sessionData, {
           amount: -cost,
-          category: "licenciement_presentateurs",
-          label: `Licenciement: ${presenterName}`
+          category: cfg.fireCategory,
+          label: `Licenciement ${cfg.singular}: ${staffName}`
         });
       }
     }
 
-    const next = {
-      ...store,
-      hired: store.hired.filter((item) => item.id !== id)
+    const next = sanitizeStore(store);
+    const nextBucket = getRoleBucket(next, roleKey);
+    next.roles[roleKey] = {
+      ...nextBucket,
+      hired: (nextBucket.hired || []).filter((item) => item.id !== id)
     };
     writeStore(sessionData, next);
+
     return {
       ok: true,
       code: "fired",
-      presenter: status.presenter,
+      role: roleKey,
+      staff: status.staff,
       cost,
-      message: `${presenterName} a été licencié.`
+      message: `${staffName} a été licencié.`
     };
   }
 
+  function listRoles() {
+    return ROLE_KEYS.map((roleKey) => {
+      const cfg = getRoleConfig(roleKey);
+      return {
+        id: cfg.id,
+        label: cfg.label,
+        singular: cfg.singular,
+        singularLower: cfg.singularLower
+      };
+    });
+  }
+
   window.PresenterEngine = {
+    listRolesForCurrentSession: function listRolesForCurrentSession() {
+      return listRoles();
+    },
+    getRoleDefinition: function getRoleDefinition(role) {
+      return getRoleConfig(role);
+    },
+    getOwnedStaffByRoleForCurrentSession: function getOwnedStaffByRoleForCurrentSession(role) {
+      const session = getSession();
+      if (!session) return [];
+      return getOwnedByRole(session, role);
+    },
+    getMarketStaffByRoleForCurrentSession: function getMarketStaffByRoleForCurrentSession(role) {
+      const session = getSession();
+      if (!session) return [];
+      return getMarketByRole(session, role);
+    },
+    hireStaffForCurrentSession: function hireStaffForCurrentSession(role, staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, message: "Session introuvable." };
+      return hireByRole(session, role, staffId);
+    },
+    getStaffByIdForCurrentSession: function getStaffByIdForCurrentSession(role, staffId) {
+      const session = getSession();
+      if (!session) return null;
+      return findOwnedByRole(session, role, staffId);
+    },
+    getStaffStarBonusForCurrentSession: function getStaffStarBonusForCurrentSession(role, staffId) {
+      const session = getSession();
+      if (!session) return 0;
+      return getStarBonusByRole(session, role, staffId);
+    },
+    getStaffTerminationStatusForCurrentSession: function getStaffTerminationStatusForCurrentSession(role, staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return getTerminationStatusByRole(session, role, staffId);
+    },
+    fireStaffForCurrentSession: function fireStaffForCurrentSession(role, staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return fireByRole(session, role, staffId);
+    },
+    regenerateRoleMarketForCurrentSession: function regenerateRoleMarketForCurrentSession(role, options) {
+      const session = getSession();
+      if (!session) return { ok: false, message: "Session introuvable." };
+      return regenerateRoleMarket(session, role, options);
+    },
+    regenerateAllMarketsForCurrentSession: function regenerateAllMarketsForCurrentSession(options) {
+      const session = getSession();
+      if (!session) return { ok: false, message: "Session introuvable." };
+      return regenerateAllMarkets(session, options);
+    },
+
+    // Compatibilité API historique "présentateurs".
     getOwnedPresentersForCurrentSession: function getOwnedPresentersForCurrentSession() {
       const session = getSession();
       if (!session) return [];
-      return getOwnedPresenters(session);
+      return getOwnedByRole(session, "presenters");
     },
     getMarketPresentersForCurrentSession: function getMarketPresentersForCurrentSession() {
       const session = getSession();
       if (!session) return [];
-      return getMarketPresenters(session);
+      return getMarketByRole(session, "presenters");
+    },
+    hirePresenterForCurrentSession: function hirePresenterForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, message: "Session introuvable." };
+      return hireByRole(session, "presenters", staffId);
+    },
+    getPresenterByIdForCurrentSession: function getPresenterByIdForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return null;
+      return findOwnedByRole(session, "presenters", staffId);
+    },
+    getPresenterStarBonusForCurrentSession: function getPresenterStarBonusForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return 0;
+      return getStarBonusByRole(session, "presenters", staffId);
+    },
+    getPresenterTerminationStatusForCurrentSession: function getPresenterTerminationStatusForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return getTerminationStatusByRole(session, "presenters", staffId);
+    },
+    firePresenterForCurrentSession: function firePresenterForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return fireByRole(session, "presenters", staffId);
     },
     regenerateMarketForCurrentSession: function regenerateMarketForCurrentSession(options) {
       const session = getSession();
       if (!session) return { ok: false, message: "Session introuvable." };
-      return regenerateMarket(session, options);
+      return regenerateAllMarkets(session, options);
     },
-    hirePresenterForCurrentSession: function hirePresenterForCurrentSession(presenterId) {
+
+    // API explicite journalistes.
+    getOwnedJournalistsForCurrentSession: function getOwnedJournalistsForCurrentSession() {
+      const session = getSession();
+      if (!session) return [];
+      return getOwnedByRole(session, "journalists");
+    },
+    getMarketJournalistsForCurrentSession: function getMarketJournalistsForCurrentSession() {
+      const session = getSession();
+      if (!session) return [];
+      return getMarketByRole(session, "journalists");
+    },
+    hireJournalistForCurrentSession: function hireJournalistForCurrentSession(staffId) {
       const session = getSession();
       if (!session) return { ok: false, message: "Session introuvable." };
-      return hirePresenter(session, presenterId);
+      return hireByRole(session, "journalists", staffId);
     },
-    getPresenterByIdForCurrentSession: function getPresenterByIdForCurrentSession(presenterId) {
+    getJournalistByIdForCurrentSession: function getJournalistByIdForCurrentSession(staffId) {
       const session = getSession();
       if (!session) return null;
-      return findOwnedPresenter(session, presenterId);
+      return findOwnedByRole(session, "journalists", staffId);
     },
-    getPresenterStarBonusForCurrentSession: function getPresenterStarBonusForCurrentSession(presenterId) {
+    getJournalistStarBonusForCurrentSession: function getJournalistStarBonusForCurrentSession(staffId) {
       const session = getSession();
       if (!session) return 0;
-      return getPresenterStarBonus(session, presenterId);
+      return getStarBonusByRole(session, "journalists", staffId);
     },
+    getJournalistTerminationStatusForCurrentSession: function getJournalistTerminationStatusForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return getTerminationStatusByRole(session, "journalists", staffId);
+    },
+    fireJournalistForCurrentSession: function fireJournalistForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return fireByRole(session, "journalists", staffId);
+    },
+
     getSalaryBreakdownForCurrentSession: function getSalaryBreakdownForCurrentSession() {
       const session = getSession();
       if (!session) return { rows: [], total: 0 };
       return getSalaryBreakdown(session);
     },
-    getPresenterTerminationStatusForCurrentSession: function getPresenterTerminationStatusForCurrentSession(presenterId) {
-      const session = getSession();
-      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
-      return getTerminationStatus(session, presenterId);
-    },
-    firePresenterForCurrentSession: function firePresenterForCurrentSession(presenterId) {
-      const session = getSession();
-      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
-      return firePresenter(session, presenterId);
-    },
+
     computeStarBonusFromStats
   };
 })();
