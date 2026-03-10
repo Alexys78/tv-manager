@@ -1,4 +1,4 @@
-(function gameApp() {
+(function tableauDeBordApp() {
   const appKeys = (window.SessionUtils && window.SessionUtils.APP_KEYS) || {};
   const DATE_GRID_KEY_PREFIX = appKeys.DATE_GRID_KEY_PREFIX || "tv_manager_date_grid_";
   const engine = window.AudienceEngine;
@@ -168,9 +168,7 @@
     } else {
       const statusLabel = (diffusionRules && typeof diffusionRules.getStatusLabel === "function")
         ? diffusionRules.getStatusLabel(statusKind, categoryId)
-        : ((categoryId === "information" && statusKind === "inedit")
-          ? "En direct"
-          : engine.DIFFUSION_LABELS[statusKind]);
+        : engine.DIFFUSION_LABELS[statusKind];
       status.appendChild(createStatusBadge(statusLabel, statusKind));
     }
 

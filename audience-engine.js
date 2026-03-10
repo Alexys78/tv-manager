@@ -12,6 +12,7 @@
   const DATE_GRID_KEY_PREFIX = appKeys.DATE_GRID_KEY_PREFIX || "tv_manager_date_grid_";
 
   const DIFFUSION_LABELS = {
+    direct: "En direct",
     inedit: "Inédit",
     rediffusion: "Rediffusion"
   };
@@ -104,10 +105,15 @@
   function getFallbackStars(title, categoryId) {
     const seed = hashString(`${categoryId}:${title}:audience_stars`);
     const roll = seed % 100;
-    if (roll < 30) return 1;
-    if (roll < 58) return 2;
-    if (roll < 80) return 3;
+    if (roll < 12) return 0.5;
+    if (roll < 27) return 1;
+    if (roll < 42) return 1.5;
+    if (roll < 56) return 2;
+    if (roll < 68) return 2.5;
+    if (roll < 79) return 3;
+    if (roll < 88) return 3.5;
     if (roll < 94) return 4;
+    if (roll < 98) return 4.5;
     return 5;
   }
 
@@ -120,7 +126,7 @@
       if (meta && Number(meta.stars) > 0) stars = Number(meta.stars);
     }
     if (!Number.isFinite(stars) || stars <= 0) stars = getFallbackStars(title, categoryId);
-    const normalized = Math.max(1, Math.min(5, Math.floor(stars)));
+    const normalized = Math.max(0.5, Math.min(5, Math.round(Number(stars) * 2) / 2));
     PROGRAM_META_CACHE.set(cacheKey, normalized);
     return normalized;
   }
@@ -133,16 +139,20 @@
 
   function normalizeEntry(raw) {
     if (!raw || typeof raw !== "object") {
-      return { title: "", categoryId: "", season: null, episode: null, fixedStartMinute: null };
+      return { title: "", categoryId: "", productionMode: null, subtype: "", season: null, episode: null, fixedStartMinute: null };
     }
     const title = typeof raw.title === "string" ? raw.title : "";
-    if (!title) return { title: "", categoryId: "", season: null, episode: null, fixedStartMinute: null };
+    if (!title) return { title: "", categoryId: "", productionMode: null, subtype: "", season: null, episode: null, fixedStartMinute: null };
     const categoryId = typeof raw.categoryId === "string" && raw.categoryId
       ? raw.categoryId
       : (CATEGORY_BY_PROGRAM.get(title) || "");
     return {
       title,
       categoryId,
+      productionMode: String(raw.productionMode || "").trim().toLowerCase() === "recorded"
+        ? "recorded"
+        : (String(raw.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+      subtype: String(raw.subtype || ""),
       season: Number.isInteger(raw.season) && raw.season > 0 ? raw.season : null,
       episode: Number.isInteger(raw.episode) && raw.episode > 0 ? raw.episode : null,
       fixedStartMinute: Number.isFinite(Number(raw.fixedStartMinute))

@@ -6,16 +6,17 @@ const assert = require('node:assert/strict');
 const projectRoot = path.resolve(__dirname, '..');
 
 const APP_PAGES = [
-  'game.html',
-  'planner.html',
-  'market.html',
-  'owned.html',
+  'tableau-de-bord.html',
+  'grille-tv.html',
+  'marche-programmes.html',
+  'vos-programmes.html',
   'audiences.html',
   'admin.html',
   'finance.html',
   'studio.html',
-  'presenters.html',
-  'personnel.html'
+  'recrutement.html',
+  'mon-personnel.html',
+  'production-studio.html'
 ];
 
 function read(file) {

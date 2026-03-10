@@ -1395,6 +1395,11 @@ a {
   color: #ffd98b;
 }
 
+.status-badge.direct {
+  background: rgba(56, 211, 159, 0.24);
+  color: #7ff6cc;
+}
+
 .status-badge.neutral {
   background: rgba(255, 255, 255, 0.12);
   color: var(--muted);
@@ -3025,6 +3030,14 @@ a {
   line-height: 1;
 }
 
+.staff-toolbar-top {
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+}
+
+.staff-toolbar-top select {
+  min-width: 220px;
+}
+
 .owned-view-toggle {
   display: inline-flex;
   gap: 0.35rem;
@@ -3323,6 +3336,10 @@ a {
   }
 
   .owned-toolbar-top {
+    grid-template-columns: 1fr;
+  }
+
+  .staff-toolbar-top {
     grid-template-columns: 1fr;
   }
 

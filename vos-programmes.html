@@ -3,22 +3,33 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TV Manager - Marché des programmes</title>
+  <title>TV Manager - Vos programmes</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" type="image/png" href="images/favicon.png" />
 </head>
 <body>
   <main class="game-layout">
     <section class="game-card">
-      <header id="appHeader" data-active-page="market"></header>
+      <header id="appHeader" data-active-page="owned"></header>
 
-      <h1>Marché des programmes</h1>
+      <h1>Vos programmes</h1>
+      <p id="ownedFeedback" class="feedback" aria-live="polite"></p>
 
-      <p id="marketFeedback" class="feedback" aria-live="polite"></p>
-      <div id="marketTabs" class="market-tabs"></div>
-      <div id="marketContent" class="market-content"></div>
+      <div id="ownedTabs" class="market-tabs"></div>
+      <div id="ownedContent" class="market-content"></div>
     </section>
   </main>
+
+  <div id="sellProgramModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sellProgramModalTitle">
+    <div class="modal-card">
+      <h2 id="sellProgramModalTitle">Vendre un programme</h2>
+      <div id="sellProgramModalBody" class="modal-body-text"></div>
+      <div class="modal-actions">
+        <button id="closeSellProgramModalBtn" type="button" class="secondary-btn">Annuler</button>
+        <button id="confirmSellProgramBtn" type="button">Valider la vente</button>
+      </div>
+    </div>
+  </div>
 
   <script src="storage-runtime.js"></script>
   <script src="cloud-defaults.js"></script>
@@ -34,6 +45,6 @@
   <script src="finance.js"></script>
   <script src="diffusion-rules.js"></script>
   <script src="program-catalog.js"></script>
-  <script src="market.js"></script>
+  <script src="vos-programmes.js"></script>
 </body>
 </html>

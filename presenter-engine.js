@@ -253,9 +253,10 @@
     const charisma = clamp(stats && stats.charisma, 0, 100);
     const notoriety = clamp(stats && stats.notoriety, 0, 100);
     const score = (editorial * 0.45) + (charisma * 0.35) + (notoriety * 0.2);
-    if (score >= 85) return 2;
-    if (score >= 70) return 1;
-    return 0;
+    if (score >= 86) return 2;
+    if (score >= 76) return 1.5;
+    if (score >= 66) return 1;
+    return 0.5;
   }
 
   function sanitizeTalent(raw, role) {
@@ -287,7 +288,7 @@
     const salaryDaily = Math.max(0, Math.round(salaryMonthly / DAYS_PER_MONTH));
     const signingBonus = Math.max(0, Math.round(Number(raw.signingBonus) || 0));
     const starBonus = Number.isFinite(Number(raw.starBonus))
-      ? clamp(raw.starBonus, 0, 2)
+      ? clamp(raw.starBonus, 0.5, 2)
       : computeStarBonusFromStats({ editorial, charisma, notoriety });
 
     return {
@@ -535,7 +536,7 @@
   function getStarBonusByRole(sessionData, role, staffId) {
     const item = findOwnedByRole(sessionData, role, staffId);
     if (!item) return 0;
-    return clamp(Number(item.starBonus) || 0, 0, 2);
+    return clamp(Number(item.starBonus) || 0.5, 0.5, 2);
   }
 
   function visibleCountFromStored(store, role) {

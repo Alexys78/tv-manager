@@ -234,10 +234,10 @@
         setFeedback("Connexion réussie. Bienvenue !", "success");
         setTimeout(() => {
           if (window.SessionUtils && typeof window.SessionUtils.withSession === "function") {
-            window.location.href = window.SessionUtils.withSession("game.html", sessionData);
+            window.location.href = window.SessionUtils.withSession("tableau-de-bord.html", sessionData);
             return;
           }
-          window.location.href = "game.html";
+          window.location.href = "tableau-de-bord.html";
         }, 700);
       } catch (error) {
         setFeedback(error && error.message ? error.message : "Connexion cloud impossible.", "error");

@@ -447,7 +447,7 @@
     const menu = document.createElement("nav");
     menu.className = "top-menu";
 
-    const dashboard = { page: "dashboard", id: "backHomeBtn", label: "Tableau de bord", path: "game.html" };
+    const dashboard = { page: "dashboard", id: "backHomeBtn", label: "Tableau de bord", path: "tableau-de-bord.html" };
     const admin = { page: "admin", id: "openAdminBtn", label: "Admin", path: "admin.html" };
     const pilotageEntries = [
       { page: "audiences", id: "openAudiencesBtn", label: "Audiences", path: "audiences.html" },
@@ -455,13 +455,13 @@
       { page: "ad-regie", id: "openAdRegieBtn", label: "Régie pub", path: "regie-pub.html" }
     ];
     const contenusEntries = [
-      { page: "planner", id: "openPlannerBtn", label: "Grille TV", path: "planner.html" },
+      { page: "planner", id: "openPlannerBtn", label: "Grille TV", path: "grille-tv.html" },
       { page: "studio", id: "openStudioBtn", label: "Studio TV", path: "studio.html" },
-      { page: "market", id: "openMarketBtn", label: "Marché des programmes", path: "market.html" },
-      { page: "owned", id: "openOwnedBtn", label: "Vos programmes", path: "owned.html" }
+      { page: "market", id: "openMarketBtn", label: "Marché des programmes", path: "marche-programmes.html" },
+      { page: "owned", id: "openOwnedBtn", label: "Vos programmes", path: "vos-programmes.html" }
     ];
     const personnelsEntries = [
-      { page: "personnel-owned", id: "openPersonnelBtn", label: "Mon personnel", path: "personnel.html" },
+      { page: "personnel-owned", id: "openPersonnelBtn", label: "Mon personnel", path: "mon-personnel.html" },
       { page: "personnel-recruitment", id: "openRecruitmentBtn", label: "Recrutement", path: "recrutement.html" }
     ];
 

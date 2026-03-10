@@ -269,10 +269,9 @@
   }
 
   function formatStarBonusLabel(value) {
-    const safe = Math.max(0, Math.min(2, Number(value) || 0));
-    if (safe >= 2) return "+2★";
-    if (safe >= 1) return "+1★";
-    return "+0★";
+    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
+    const text = Number.isInteger(safe) ? String(safe) : String(safe).replace(".", ",");
+    return `+${text}★`;
   }
 
   function normalizeToken(value) {
@@ -440,9 +439,8 @@
     if (!entry || entry.recurrenceMode !== "single") return false;
     const dateKey = String(entry.dateKey || "");
     if (!dateKey) return false;
-    const today = getTodayDateKey();
     const yesterday = getYesterdayDateKey();
-    return dateKey === today || dateKey === yesterday;
+    return dateKey === yesterday;
   }
 
   function hasRecurringStarted(entry) {
@@ -624,7 +622,7 @@
 
     if (singleLocked) {
       const intro = document.createElement("p");
-      intro.textContent = "Suppression impossible pour un programme prévu aujourd'hui ou hier.";
+      intro.textContent = "Suppression impossible pour un programme prévu hier.";
       body.append(intro);
       closeBtn.classList.remove("hidden");
       cancelBtn.classList.add("hidden");
@@ -945,6 +943,10 @@
             return {
               title,
               categoryId: String(entry.categoryId || "information"),
+              productionMode: String(entry.productionMode || "").trim().toLowerCase() === "recorded"
+                ? "recorded"
+                : (String(entry.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+              subtype: String(entry.subtype || ""),
               season: Number(entry.season) > 0 ? Number(entry.season) : null,
               episode: Number(entry.episode) > 0 ? Number(entry.episode) : null,
               studioScheduleId: String(entry.studioScheduleId || ""),
@@ -994,6 +996,10 @@
         entry: {
           title: String(entry.title || ""),
           categoryId: String(entry.categoryId || "information"),
+          productionMode: String(entry.productionMode || "").trim().toLowerCase() === "recorded"
+            ? "recorded"
+            : (String(entry.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+          subtype: String(entry.subtype || ""),
           season: Number(entry.season) > 0 ? Number(entry.season) : null,
           episode: Number(entry.episode) > 0 ? Number(entry.episode) : null,
           studioScheduleId: String(entry.studioScheduleId || ""),
@@ -1130,6 +1136,10 @@
         {
           title: scheduleEntry.title,
           categoryId: String(scheduleEntry.categoryId || "information"),
+          productionMode: String(scheduleEntry.productionMode || "").trim().toLowerCase() === "recorded"
+            ? "recorded"
+            : "direct",
+          subtype: String(scheduleEntry.subtype || ""),
           season: null,
           episode: null,
           studioScheduleId: scheduleEntry.id,
@@ -1185,7 +1195,10 @@
     const title = sanitizeProgramTitle(raw.title);
     const categoryId = String(raw.categoryId || "");
     const subtype = String(raw.subtype || "");
+    const productionModeRaw = String(raw.productionMode || "").trim().toLowerCase();
+    const productionMode = productionModeRaw === "recorded" ? "recorded" : "direct";
     const startMinute = Number(raw.startMinute);
+    const shootStartMinute = Number(raw.shootStartMinute);
     const duration = Number(raw.duration);
     const endMinute = Number(raw.endMinute);
     const recurrenceMode = raw.recurrenceMode === "recurring" ? "recurring" : "single";
@@ -1224,8 +1237,12 @@
       dateKey,
       title,
       categoryId,
+      productionMode,
       subtype,
       startMinute,
+      shootStartMinute: Number.isFinite(shootStartMinute)
+        ? Math.max(0, Math.min((24 * 60) - 1, Math.floor(shootStartMinute)))
+        : null,
       duration,
       endMinute,
       recurrenceMode,
@@ -1261,7 +1278,8 @@
         .sort((a, b) => {
           const aKey = a.recurrenceMode === "recurring" ? a.recurrenceStartDate : a.dateKey;
           const bKey = b.recurrenceMode === "recurring" ? b.recurrenceStartDate : b.dateKey;
-          return aKey === bKey ? a.startMinute - b.startMinute : aKey.localeCompare(bKey);
+          if (aKey !== bKey) return aKey.localeCompare(bKey);
+          return getStudioOccupiedRange(a).start - getStudioOccupiedRange(b).start;
         });
     } catch {
       return [];
@@ -1281,7 +1299,23 @@
   }
 
   function hasTimeOverlap(a, b) {
-    return a.startMinute < b.endMinute && b.startMinute < a.endMinute;
+    const rangeA = getStudioOccupiedRange(a);
+    const rangeB = getStudioOccupiedRange(b);
+    return rangeA.start < rangeB.end && rangeB.start < rangeA.end;
+  }
+
+  function getStudioOccupiedRange(entry) {
+    const duration = Math.max(5, Number(entry && entry.duration) || 0);
+    const productionMode = String(entry && entry.productionMode || "").trim().toLowerCase();
+    const diffusionStart = Number(entry && entry.startMinute);
+    const shootStart = Number(entry && entry.shootStartMinute);
+    const start = (productionMode === "recorded" && Number.isFinite(shootStart))
+      ? shootStart
+      : (Number.isFinite(diffusionStart) ? diffusionStart : 0);
+    return {
+      start,
+      end: start + duration
+    };
   }
 
   function recurringOccursOnDate(entry, dateKey) {
@@ -1526,6 +1560,8 @@
     const ratingLabel = subtypeLabel === "Faits divers"
       ? String(entry.ageRating || "TP")
       : "TP";
+    const occupied = getStudioOccupiedRange(entry);
+    const isRecorded = String(entry.productionMode || "").trim().toLowerCase() === "recorded";
 
     body.replaceChildren();
     const addDetailRow = (label, value) => {
@@ -1540,8 +1576,13 @@
     addDetailRow("Type", typeLabel);
     addDetailRow("Sous-type", subtypeLabel);
     addDetailRow("Durée", `${durationValue} min`);
-    addDetailRow("Heure", `${formatMinute(entry.startMinute)} - ${formatMinute(entry.endMinute)}`);
-    addDetailRow("Diffusion", recurrenceModeLabel);
+    if (isRecorded) {
+      addDetailRow("Tournage", `${formatMinute(occupied.start)} - ${formatMinute(occupied.end)}`);
+      addDetailRow("Diffusion", `${formatMinute(entry.startMinute)} - ${formatMinute(entry.endMinute)}`);
+    } else {
+      addDetailRow("Heure", `${formatMinute(entry.startMinute)} - ${formatMinute(entry.endMinute)}`);
+    }
+    addDetailRow("Récurrence", recurrenceModeLabel);
     if (entry.recurrenceMode === "single") {
       addDetailRow("Date de diffusion", formatDateLabel(entry.dateKey));
     } else {
@@ -1596,7 +1637,7 @@
           if (entry.recurrenceMode === "recurring") return recurringOccursOnDate(entry, dateKey);
           return String(entry.dateKey || "") === dateKey;
         })
-        .sort((a, b) => a.startMinute - b.startMinute);
+        .sort((a, b) => getStudioOccupiedRange(a).start - getStudioOccupiedRange(b).start);
 
       const count = document.createElement("span");
       count.className = "studio-planning-day-count";
@@ -1617,7 +1658,8 @@
           item.className = `studio-planning-event ${entry.recurrenceMode === "recurring" ? "recurring" : "single"}`;
           const hour = document.createElement("span");
           hour.className = "studio-planning-event-hour";
-          hour.textContent = `${formatMinute(entry.startMinute)}-${formatMinute(entry.endMinute)}`;
+          const occupied = getStudioOccupiedRange(entry);
+          hour.textContent = `${formatMinute(occupied.start)}-${formatMinute(occupied.end)}`;
           const name = document.createElement("span");
           name.className = "studio-planning-event-title";
           name.textContent = entry.title;
@@ -1740,7 +1782,9 @@
       const dateA = a.nextDateKey || "9999-12-31";
       const dateB = b.nextDateKey || "9999-12-31";
       if (dateA !== dateB) return dateA.localeCompare(dateB);
-      if (a.entry.startMinute !== b.entry.startMinute) return a.entry.startMinute - b.entry.startMinute;
+      const startA = getStudioOccupiedRange(a.entry).start;
+      const startB = getStudioOccupiedRange(b.entry).start;
+      if (startA !== startB) return startA - startB;
       return String(a.entry.title || "").localeCompare(String(b.entry.title || ""), "fr");
     });
     const calendarView = buildPlanningCalendar(prepared.map((item) => item.entry), todayKey);

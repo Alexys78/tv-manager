@@ -25,6 +25,16 @@
                 <label for="productionStudioSelect">Studio TV</label>
                 <select id="productionStudioSelect"></select>
 
+                <label for="productionModeSelect">Mode de production</label>
+                <div id="productionModeButtons" class="studio-chip-row">
+                  <button type="button" class="filter-chip" data-value="direct">Direct</button>
+                  <button type="button" class="filter-chip" data-value="recorded">Enregistré</button>
+                </div>
+                <select id="productionModeSelect" class="hidden">
+                  <option value="direct">Direct</option>
+                  <option value="recorded">Enregistré</option>
+                </select>
+
                 <label for="productionTypeSelect">Type</label>
                 <div id="productionTypeButtons" class="studio-chip-row"></div>
                 <select id="productionTypeSelect" class="hidden"></select>
@@ -83,8 +93,14 @@
                 <label for="productionStartInput" id="productionStartLabel">Heure de diffusion</label>
                 <input id="productionStartInput" type="time" step="300" required />
 
+                <label id="productionShootStartLabel" class="hidden" for="productionShootStartInput">Heure de tournage</label>
+                <input id="productionShootStartInput" class="hidden" type="time" step="300" />
+
                 <label id="productionSecondStartLabel" class="hidden" for="productionSecondStartInput">Heure de la 2e diffusion</label>
                 <input id="productionSecondStartInput" class="hidden" type="time" step="300" />
+
+                <label id="productionSecondShootStartLabel" class="hidden" for="productionSecondShootStartInput">Heure du 2e tournage</label>
+                <input id="productionSecondShootStartInput" class="hidden" type="time" step="300" />
 
                 <label id="productionPresentersCountLabel" for="productionPresentersCountSelect">Nombre de journalistes</label>
                 <div id="productionPresentersCountButtons" class="studio-chip-row"></div>
@@ -149,6 +165,6 @@
   <script src="presenter-engine.js"></script>
   <script src="diffusion-rules.js"></script>
   <script src="program-catalog.js"></script>
-  <script src="studio-production.js"></script>
+  <script src="production-studio.js"></script>
 </body>
 </html>

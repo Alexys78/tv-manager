@@ -1,4 +1,4 @@
-(function studioProductionPage() {
+(function productionStudioPage() {
   const sessionUtils = window.SessionUtils;
   const appKeys = (sessionUtils && sessionUtils.APP_KEYS) || {};
   const STUDIO_KEY_PREFIX = appKeys.STUDIO_KEY_PREFIX || "tv_manager_studio_";
@@ -12,7 +12,7 @@
       id: "studio_1",
       name: "Studio TV 1",
       maxPeopleOnSet: 3,
-      allowedCategoryIds: ["information", "divertissement", "documentaires", "jeunesse", "magazines", "realite", "culture"]
+      allowedCategoryIds: ["information", "magazines"]
     }
   ];
   const bank = window.PlayerBank;
@@ -116,12 +116,7 @@
   };
   const DEFAULT_TYPE_DEFINITIONS = [
     { id: "information", name: "Informations" },
-    { id: "divertissement", name: "Divertissements" },
-    { id: "magazines", name: "Magazines" },
-    { id: "jeunesse", name: "Jeunesse" },
-    { id: "documentaires", name: "Documentaires" },
-    { id: "realite", name: "Télé-réalité" },
-    { id: "culture", name: "Culture & Musique" }
+    { id: "magazines", name: "Magazines" }
   ];
   const EXCLUDED_STUDIO_TYPES = new Set(["films", "series"]);
   const WEEKDAY_OPTIONS = [
@@ -281,9 +276,12 @@
     if (!raw || typeof raw !== "object") return null;
     const title = String(raw.title || "").trim();
     const categoryId = String(raw.categoryId || "").trim() || "information";
+    const productionModeRaw = String(raw.productionMode || "").trim().toLowerCase();
+    const productionMode = productionModeRaw === "recorded" ? "recorded" : "direct";
     const recurrenceMode = raw.recurrenceMode === "recurring" ? "recurring" : "single";
     const startMinute = Number(raw.startMinute);
     const endMinute = Number(raw.endMinute);
+    const shootStartMinute = Number(raw.shootStartMinute);
     const duration = Number(raw.duration);
     if (!title || !Number.isFinite(startMinute) || !Number.isFinite(endMinute) || !Number.isFinite(duration)) return null;
     if (duration <= 0 || endMinute <= startMinute) return null;
@@ -306,10 +304,14 @@
       id: String(raw.id || `${Date.now()}_${Math.floor(Math.random() * 10000)}`),
       title,
       categoryId,
+      productionMode,
       subtype: String(raw.subtype || ""),
       duration: Math.floor(duration),
       startMinute: Math.floor(startMinute),
       endMinute: Math.floor(endMinute),
+      shootStartMinute: Number.isFinite(shootStartMinute)
+        ? Math.max(0, Math.min((24 * 60) - 1, Math.floor(shootStartMinute)))
+        : null,
       recurrenceMode,
       dateKey: String(raw.dateKey || ""),
       recurrenceStartDate: String(raw.recurrenceStartDate || ""),
@@ -351,7 +353,23 @@
   }
 
   function hasTimeOverlap(a, b) {
-    return a.startMinute < b.endMinute && b.startMinute < a.endMinute;
+    const rangeA = getStudioOccupiedRange(a);
+    const rangeB = getStudioOccupiedRange(b);
+    return rangeA.start < rangeB.end && rangeB.start < rangeA.end;
+  }
+
+  function getStudioOccupiedRange(entry) {
+    const duration = Math.max(5, Number(entry && entry.duration) || 0);
+    const productionMode = String(entry && entry.productionMode || "").trim().toLowerCase();
+    const diffusionStart = Number(entry && entry.startMinute);
+    const shootStart = Number(entry && entry.shootStartMinute);
+    const start = (productionMode === "recorded" && Number.isFinite(shootStart))
+      ? shootStart
+      : (Number.isFinite(diffusionStart) ? diffusionStart : 0);
+    return {
+      start,
+      end: start + duration
+    };
   }
 
   function recurringOccursOnDate(entry, dateKey) {
@@ -477,6 +495,10 @@
         entry: {
           title: String(entry.title || ""),
           categoryId: String(entry.categoryId || "information"),
+          productionMode: String(entry.productionMode || "").trim().toLowerCase() === "recorded"
+            ? "recorded"
+            : (String(entry.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+          subtype: String(entry.subtype || ""),
           season: Number(entry.season) > 0 ? Number(entry.season) : null,
           episode: Number(entry.episode) > 0 ? Number(entry.episode) : null,
           studioScheduleId: String(entry.studioScheduleId || ""),
@@ -562,6 +584,10 @@
       day.day = syncDayWithForcedProgram(day.day, {
         title: scheduleEntry.title,
         categoryId: String(scheduleEntry.categoryId || "information"),
+        productionMode: String(scheduleEntry.productionMode || "").trim().toLowerCase() === "recorded"
+          ? "recorded"
+          : "direct",
+        subtype: String(scheduleEntry.subtype || ""),
         season: null,
         episode: null,
         studioScheduleId: scheduleEntry.id,
@@ -630,6 +656,12 @@
       .trim();
   }
 
+  function formatStaffStarBonusLabel(value) {
+    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
+    const text = Number.isInteger(safe) ? String(safe) : String(safe).replace(".", ",");
+    return `+${text}★`;
+  }
+
   function presenterMatchesSubtype(presenter, subtype) {
     const subtypeKey = Object.keys(SUBTYPE_SPECIALTY_MAP).find((key) => normalizeToken(key) === normalizeToken(subtype));
     const required = subtypeKey ? SUBTYPE_SPECIALTY_MAP[subtypeKey] : [];
@@ -662,6 +694,8 @@
 
   const form = document.getElementById("studioProductionPageForm");
   const studioSelect = document.getElementById("productionStudioSelect");
+  const modeSelect = document.getElementById("productionModeSelect");
+  const modeButtons = document.getElementById("productionModeButtons");
   const typeSelect = document.getElementById("productionTypeSelect");
   const typeButtons = document.getElementById("productionTypeButtons");
   const subtypeSelect = document.getElementById("productionSubtypeSelect");
@@ -676,10 +710,12 @@
   const recurringStartLabel = document.getElementById("productionRecurringStartLabel");
   const recurringDaysWrap = document.getElementById("productionRecurringDaysWrap");
   const timeInput = document.getElementById("productionStartInput");
+  const shootStartInput = document.getElementById("productionShootStartInput");
   const startLabel = document.getElementById("productionStartLabel");
   const runsSelect = document.getElementById("productionDailyRunsSelect");
   const runsButtons = document.getElementById("productionDailyRunsButtons");
   const secondStartInput = document.getElementById("productionSecondStartInput");
+  const secondShootStartInput = document.getElementById("productionSecondShootStartInput");
   const ageRatingSelect = document.getElementById("productionAgeRatingSelect");
   const ageRatingButtons = document.getElementById("productionAgeRatingButtons");
   const presentersCountSelect = document.getElementById("productionPresentersCountSelect");
@@ -698,17 +734,26 @@
   const ageRatingLabel = document.getElementById("productionAgeRatingLabel");
   const runsLabel = document.getElementById("productionRunsLabel");
   const secondStartLabel = document.getElementById("productionSecondStartLabel");
+  const shootStartLabel = document.getElementById("productionShootStartLabel");
+  const secondShootStartLabel = document.getElementById("productionSecondShootStartLabel");
   const presentersCountLabel = document.getElementById("productionPresentersCountLabel");
   const presentersListLabel = document.getElementById("productionPresentersListLabel");
   if (
-    !form || !studioSelect || !typeSelect || !typeButtons || !subtypeSelect || !subtypeButtons || !durationSelect || !durationButtons
+    !form || !studioSelect || !modeSelect || !modeButtons || !typeSelect || !typeButtons || !subtypeSelect || !subtypeButtons || !durationSelect || !durationButtons
     || !recurrenceModeSelect || !recurrenceButtons || !nameInput || !dateInput || !recurringStartInput
-    || !recurringStartLabel || !recurringDaysWrap || !timeInput || !startLabel || !runsSelect || !runsButtons || !secondStartInput
+    || !recurringStartLabel || !recurringDaysWrap || !timeInput || !shootStartInput || !startLabel || !runsSelect || !runsButtons || !secondStartInput || !secondShootStartInput
     || !ageRatingSelect || !ageRatingButtons || !presentersCountSelect || !presentersCountButtons || !guestsCountSelect
     || !guestsCountButtons || !presentersWrap || !setupCostPreview || !perRunCostPreview || !starsPreview
-    || !peoplePreview || !singleDateLabel || !recurringDaysLabel || !ageRatingLabel || !runsLabel || !secondStartLabel
+    || !peoplePreview || !singleDateLabel || !recurringDaysLabel || !ageRatingLabel || !runsLabel || !secondStartLabel || !shootStartLabel || !secondShootStartLabel
     || !presentersCountLabel || !presentersListLabel
   ) return;
+
+  const studioAllowedTypeIds = new Set(
+    STUDIO_OPTIONS
+      .flatMap((studio) => (Array.isArray(studio.allowedCategoryIds) ? studio.allowedCategoryIds : []))
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
 
   const typeDefinitions = (() => {
     if (programCatalog && typeof programCatalog.getFullCategoriesForCurrentSession === "function") {
@@ -716,10 +761,14 @@
       if (Array.isArray(full) && full.length > 0) {
         return full
           .map((category) => ({ id: String(category.id || ""), name: String(category.name || category.id || "") }))
-          .filter((category) => category.id && !EXCLUDED_STUDIO_TYPES.has(category.id));
+          .filter((category) => (
+            category.id
+            && !EXCLUDED_STUDIO_TYPES.has(category.id)
+            && studioAllowedTypeIds.has(category.id)
+          ));
       }
     }
-    return DEFAULT_TYPE_DEFINITIONS.slice();
+    return DEFAULT_TYPE_DEFINITIONS.filter((category) => studioAllowedTypeIds.has(category.id));
   })();
   const recurringDays = new Set();
   let durationOptions = [];
@@ -761,6 +810,10 @@
 
   function syncRunsButtonsUi() {
     setActiveChip(runsButtons, runsSelect.value);
+  }
+
+  function syncModeButtonsUi() {
+    setActiveChip(modeButtons, modeSelect.value);
   }
 
   function renderTypeButtons() {
@@ -913,9 +966,29 @@
     secondStartLabel.classList.toggle("hidden", !withTwoRuns);
     secondStartInput.classList.toggle("hidden", !withTwoRuns);
     secondStartInput.required = withTwoRuns;
-    if (!withTwoRuns) secondStartInput.value = "";
+    if (!withTwoRuns) {
+      secondStartInput.value = "";
+      secondShootStartInput.value = "";
+    }
     startLabel.textContent = withTwoRuns ? "Heure de la première diffusion" : "Heure de diffusion";
     secondStartLabel.textContent = "Heure de la 2e diffusion";
+    syncProductionModeUi();
+  }
+
+  function syncProductionModeUi() {
+    const recorded = modeSelect.value === "recorded";
+    const withTwoRuns = Number(durationSelect.value) === 5 && runsSelect.value === "2";
+    shootStartLabel.classList.toggle("hidden", !recorded);
+    shootStartInput.classList.toggle("hidden", !recorded);
+    shootStartInput.required = recorded;
+    secondShootStartLabel.classList.toggle("hidden", !(recorded && withTwoRuns));
+    secondShootStartInput.classList.toggle("hidden", !(recorded && withTwoRuns));
+    secondShootStartInput.required = recorded && withTwoRuns;
+    if (!recorded) {
+      shootStartInput.value = "";
+      secondShootStartInput.value = "";
+    }
+    syncModeButtonsUi();
   }
 
   function getCurrentSetCapacity() {
@@ -1044,7 +1117,7 @@
     const options = presenters.map((presenter) => {
       const option = document.createElement("option");
       option.value = presenter.id;
-      option.textContent = `${presenter.fullName} (${presenter.specialty} · +${Math.max(0, Math.min(2, Number(presenter.starBonus) || 0))}★)`;
+      option.textContent = `${presenter.fullName} (${presenter.specialty} · ${formatStaffStarBonusLabel(presenter.starBonus)})`;
       return option;
     });
     select.replaceChildren(...options);
@@ -1084,6 +1157,10 @@
     const ui = getCurrentStaffUi();
     const selectedIds = getSelectedPresenterIds();
     const expected = Math.max(1, Number(presentersCountSelect.value) || 1);
+    const available = Object.keys(presentersMap || {}).length;
+    if (available < expected) {
+      return { ok: false, message: `Tu as ${available} ${ui.plural} recruté(s), il en faut ${expected}.` };
+    }
     if (selectedIds.length !== expected) {
       return { ok: false, message: `Sélectionne tous les ${ui.plural} requis.` };
     }
@@ -1144,7 +1221,7 @@
     refreshStaffRoleLabels();
     refreshStudioCapacityHelp();
     const presenters = listOwnedStaffByRole(getCurrentStaffRole());
-    const maxPresenters = Math.max(1, Math.min(getCurrentSetCapacity(), presenters.length || 1));
+    const maxPresenters = Math.max(1, getCurrentSetCapacity());
     const current = Math.max(1, Math.min(maxPresenters, Number(presentersCountSelect.value) || 1));
     presentersCountSelect.replaceChildren(
       ...Array.from({ length: maxPresenters }, (_, idx) => {
@@ -1171,8 +1248,11 @@
     recurringStartInput.max = maxDate;
     recurringStartInput.value = minDate;
     timeInput.value = "08:00";
+    modeSelect.value = "direct";
     runsSelect.value = "1";
     secondStartInput.value = "";
+    shootStartInput.value = "";
+    secondShootStartInput.value = "";
     ageRatingSelect.value = "TP";
     recurrenceModeSelect.value = "single";
     recurringDays.clear();
@@ -1200,6 +1280,13 @@
     syncRecurringUi();
     setFeedback("", "");
   });
+  modeButtons.addEventListener("click", (event) => {
+    const button = event.target && event.target.closest("button[data-value]") ? event.target.closest("button[data-value]") : null;
+    if (!button) return;
+    modeSelect.value = String(button.dataset.value || "direct");
+    syncProductionModeUi();
+    refreshSimulation();
+  });
   runsButtons.addEventListener("click", (event) => {
     const button = event.target && event.target.closest("button[data-value]") ? event.target.closest("button[data-value]") : null;
     if (!button) return;
@@ -1222,6 +1309,7 @@
     renderDurationControl();
     syncSubtypeUi();
     syncRunsUi();
+    syncProductionModeUi();
     initPeopleControls();
     refreshSimulation();
   });
@@ -1236,6 +1324,7 @@
   syncRecurringUi();
   syncSubtypeUi();
   syncRunsUi();
+  syncProductionModeUi();
   refreshSimulation();
 
   form.addEventListener("submit", async (event) => {
@@ -1253,6 +1342,7 @@
     const selectedPresenterNames = selectedPresenters.map((presenter) => String(presenter.fullName || "").trim()).filter(Boolean);
     const selectedType = String(typeSelect.value || "information").trim();
     const subtype = String(subtypeSelect.value || "").trim();
+    const productionMode = modeSelect.value === "recorded" ? "recorded" : "direct";
     const selectedPresenterBonuses = selectedPresenters.map((presenter) => Math.max(0, Math.min(2, Number(presenter.starBonus) || 0)));
     const teamBonus = computeTeamPresenterBonusForSubtype(selectedPresenters, subtype);
     const title = sanitizeProgramTitle(nameInput.value);
@@ -1262,8 +1352,10 @@
     const recurrenceDays = recurrenceMode === "recurring" ? getSelectedRecurringDays() : [];
     const duration = Number(durationSelect.value) || 60;
     const startMinute = parseTimeToMinutes(timeInput.value);
+    const shootStartMinute = parseTimeToMinutes(shootStartInput.value);
     const requestedRuns = (Number(duration) === 5 && runsSelect.value === "2") ? 2 : 1;
     const secondStartMinute = parseTimeToMinutes(secondStartInput.value);
+    const secondShootStartMinute = parseTimeToMinutes(secondShootStartInput.value);
     const guestsCount = Math.max(0, Number(guestsCountSelect.value) || 0);
     const presentersCount = Math.max(1, Number(presentersCountSelect.value) || 1);
     const totalPeople = presentersCount + guestsCount;
@@ -1327,12 +1419,47 @@
         return;
       }
     }
+    if (productionMode === "recorded") {
+      if (!Number.isFinite(shootStartMinute)) {
+        setFeedback("Heure de tournage invalide.", "error");
+        return;
+      }
+      const shootEndMinute = shootStartMinute + duration;
+      if (shootEndMinute > (24 * 60)) {
+        setFeedback("Le tournage dépasse minuit.", "error");
+        return;
+      }
+      if ((startMinute - shootEndMinute) < 60) {
+        setFeedback("Il faut au moins 1h entre la fin du tournage et la diffusion.", "error");
+        return;
+      }
+      if (requestedRuns === 2) {
+        if (!Number.isFinite(secondShootStartMinute)) {
+          setFeedback("Heure du 2e tournage invalide.", "error");
+          return;
+        }
+        const secondShootEndMinute = secondShootStartMinute + duration;
+        if (secondShootEndMinute > (24 * 60)) {
+          setFeedback("Le 2e tournage dépasse minuit.", "error");
+          return;
+        }
+        if ((secondStartMinute - secondShootEndMinute) < 60) {
+          setFeedback("Il faut au moins 1h entre la fin du 2e tournage et la 2e diffusion.", "error");
+          return;
+        }
+        if (Math.abs(secondShootStartMinute - shootStartMinute) < duration) {
+          setFeedback("Les deux tournages se chevauchent.", "error");
+          return;
+        }
+      }
+    }
 
     const currentSchedule = loadSchedule();
     const firstPresenter = selectedPresenters[0];
     const basePayload = {
       title,
       categoryId: selectedType,
+      productionMode,
       subtype,
       duration,
       recurrenceMode,
@@ -1352,7 +1479,8 @@
       studioName: getSelectedStudio().name,
       presentersCount,
       guestsCount,
-      maxPeopleOnSet: maxPeople
+      maxPeopleOnSet: maxPeople,
+      shootStartMinute: productionMode === "recorded" ? shootStartMinute : null
     };
     const candidates = [
       normalizeScheduleEntry({
@@ -1366,11 +1494,12 @@
       candidates.push(
         normalizeScheduleEntry({
           ...basePayload,
-          id: `${Date.now()}_${Math.floor(Math.random() * 10000)}_2`,
-          startMinute: secondStartMinute,
-          endMinute: secondStartMinute + duration
-        })
-      );
+        id: `${Date.now()}_${Math.floor(Math.random() * 10000)}_2`,
+        startMinute: secondStartMinute,
+        endMinute: secondStartMinute + duration,
+        shootStartMinute: productionMode === "recorded" ? secondShootStartMinute : null
+      })
+    );
     }
     if (candidates.length === 0) {
       setFeedback("Impossible de créer la production.", "error");
@@ -1404,6 +1533,7 @@
       subtype,
       duration,
       ageRating,
+      productionMode,
       presenterId: firstPresenter ? firstPresenter.id : "",
       presenterName: firstPresenter ? String(firstPresenter.fullName || "") : "",
       presenterStarBonus: teamBonus,

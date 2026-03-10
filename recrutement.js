@@ -8,11 +8,13 @@
 
   const state = {
     role: "presenters",
-    search: "",
-    specialty: "all",
+    genre: "all",
+    subgenre: "all",
+    stars: "all",
     sortBy: "name",
     asc: true
   };
+  const STAR_FILTER_VALUES = [0.5, 1, 1.5, 2];
 
   function formatEuro(value) {
     return sessionUtils.formatEuro(Number(value) || 0);
@@ -41,6 +43,52 @@
     return roles.find((item) => item.id === roleId) || roles[0];
   }
 
+  function getRoleSpecialties(roleId, rows) {
+    const marketRows = Array.isArray(rows) ? rows : [];
+    if (presenterEngine && typeof presenterEngine.getRoleDefinition === "function") {
+      const definition = presenterEngine.getRoleDefinition(roleId);
+      if (definition && Array.isArray(definition.specialties) && definition.specialties.length > 0) {
+        return definition.specialties.slice();
+      }
+    }
+    return marketRows.map((item) => String(item && item.specialty ? item.specialty : "")).filter(Boolean);
+  }
+
+  function parseSpecialty(specialty, roleId) {
+    const safe = String(specialty || "").trim();
+    if (!safe) return { genre: "", subgenre: "" };
+    const parts = safe.split("·").map((item) => item.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      return {
+        genre: parts[0],
+        subgenre: parts.slice(1).join(" · ")
+      };
+    }
+    if (String(roleId || state.role || "") === "journalists") {
+      return {
+        genre: "Informations",
+        subgenre: safe
+      };
+    }
+    return {
+      genre: "Autres",
+      subgenre: safe
+    };
+  }
+
+  function buildTaxonomy(roleId, rows) {
+    const map = new Map();
+    const fromRole = getRoleSpecialties(roleId, rows);
+    const fromRows = Array.isArray(rows) ? rows.map((item) => String(item && item.specialty ? item.specialty : "")) : [];
+    [...fromRole, ...fromRows].forEach((specialty) => {
+      const parsed = parseSpecialty(specialty, roleId);
+      if (!parsed.genre || !parsed.subgenre) return;
+      if (!map.has(parsed.genre)) map.set(parsed.genre, new Set());
+      map.get(parsed.genre).add(parsed.subgenre);
+    });
+    return map;
+  }
+
   function getMarket(roleId) {
     const role = String(roleId || state.role || "presenters");
     if (presenterEngine && typeof presenterEngine.getMarketStaffByRoleForCurrentSession === "function") {
@@ -56,10 +104,14 @@
   }
 
   function formatStarBonusLabel(value) {
-    const safe = Math.max(0, Math.min(2, Number(value) || 0));
-    if (safe >= 2) return "+2★";
-    if (safe >= 1) return "+1★";
-    return "+0★";
+    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
+    const text = Number.isInteger(safe) ? String(safe) : String(safe).replace(".", ",");
+    return `+${text}★`;
+  }
+
+  function normalizeStarBonusValue(value) {
+    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
+    return Math.round(safe * 2) / 2;
   }
 
   function compareRows(a, b) {
@@ -87,15 +139,15 @@
     if (!roles.some((role) => role.id === state.role)) state.role = roles[0] ? roles[0].id : "presenters";
 
     const tabs = roles.map((role) => {
-      const count = getMarket(role.id).length;
       const button = document.createElement("button");
       button.type = "button";
       button.className = `market-tab ${state.role === role.id ? "active" : ""}`.trim();
-      button.textContent = `${role.label} (${count})`;
+      button.textContent = role.label;
       button.addEventListener("click", () => {
         state.role = role.id;
-        state.specialty = "all";
-        state.search = "";
+        state.genre = "all";
+        state.subgenre = "all";
+        state.stars = "all";
         renderPage();
       });
       return button;
@@ -105,28 +157,18 @@
   }
 
   function buildToolbar(rows) {
-    const roleMeta = getRoleMeta(state.role);
     const block = document.createElement("section");
     block.className = "game-block owned-toolbar-block market-toolbar-block";
 
     const top = document.createElement("div");
-    top.className = "owned-toolbar-top";
-
-    const searchInput = document.createElement("input");
-    searchInput.type = "search";
-    searchInput.placeholder = `Rechercher un ${String(roleMeta.singular || "profil").toLowerCase()}...`;
-    searchInput.value = state.search;
-    searchInput.addEventListener("input", () => {
-      state.search = searchInput.value || "";
-      renderPage();
-    });
+    top.className = "owned-toolbar-top staff-toolbar-top";
 
     const sortSelect = document.createElement("select");
     [
       { value: "name", label: "Trier: Nom" },
       { value: "salary", label: "Trier: Salaire" },
       { value: "impact", label: "Trier: Impact" },
-      { value: "bonus", label: "Trier: Prime" }
+      { value: "bonus", label: "Trier: Coût recrutement" }
     ].forEach((item) => {
       const option = document.createElement("option");
       option.value = item.value;
@@ -153,64 +195,165 @@
     resetBtn.className = "secondary-btn";
     resetBtn.textContent = "Réinitialiser";
     resetBtn.addEventListener("click", () => {
-      state.search = "";
-      state.specialty = "all";
+      state.genre = "all";
+      state.subgenre = "all";
+      state.stars = "all";
       state.sortBy = "name";
       state.asc = true;
       renderPage();
     });
 
-    top.append(searchInput, sortSelect, orderBtn, resetBtn);
+    top.append(sortSelect, orderBtn, resetBtn);
 
     const filters = document.createElement("div");
     filters.className = "owned-filters-grid";
 
-    const specialtyWrap = document.createElement("div");
-    const specialtyTitle = document.createElement("strong");
-    specialtyTitle.textContent = "Spécialité";
-    const specialtyChips = document.createElement("div");
-    specialtyChips.className = "filter-chip-row";
-    const specialties = Array.from(new Set(rows.map((item) => String(item.specialty || "").trim()).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+    const isJournalists = state.role === "journalists";
+    const taxonomy = buildTaxonomy(state.role, rows);
+    const genres = Array.from(taxonomy.keys()).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+    if (isJournalists) {
+      state.genre = "all";
+    } else if (state.genre !== "all" && !genres.includes(state.genre)) {
+      state.genre = "all";
+      state.subgenre = "all";
+    }
 
-    const allChip = document.createElement("button");
-    allChip.type = "button";
-    allChip.className = `filter-chip ${state.specialty === "all" ? "active" : ""}`.trim();
-    allChip.textContent = "Toutes";
-    allChip.addEventListener("click", () => {
-      state.specialty = "all";
+    let subgenres = [];
+    if (isJournalists) {
+      const infoSet = taxonomy.get("Informations");
+      if (infoSet instanceof Set) {
+        subgenres = Array.from(infoSet);
+      } else {
+        const all = new Set();
+        genres.forEach((genre) => {
+          const set = taxonomy.get(genre);
+          if (!(set instanceof Set)) return;
+          set.forEach((sub) => all.add(sub));
+        });
+        subgenres = Array.from(all);
+      }
+    } else if (state.genre === "all") {
+      const all = new Set();
+      genres.forEach((genre) => {
+        const set = taxonomy.get(genre);
+        if (!(set instanceof Set)) return;
+        set.forEach((sub) => all.add(sub));
+      });
+      subgenres = Array.from(all);
+    } else {
+      const selectedSet = taxonomy.get(state.genre);
+      subgenres = selectedSet instanceof Set ? Array.from(selectedSet) : [];
+    }
+    subgenres.sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+    if (state.subgenre !== "all" && !subgenres.includes(state.subgenre)) {
+      state.subgenre = "all";
+    }
+
+    const genreWrap = document.createElement("div");
+    genreWrap.className = "filter-group";
+    const genreTitle = document.createElement("span");
+    genreTitle.className = "filter-label";
+    genreTitle.textContent = "Genre";
+    const genreChips = document.createElement("div");
+    genreChips.className = "filter-chip-row";
+
+    const genreAllChip = document.createElement("button");
+    genreAllChip.type = "button";
+    genreAllChip.className = `filter-chip ${state.genre === "all" ? "active" : ""}`.trim();
+    genreAllChip.textContent = "Tous";
+    genreAllChip.addEventListener("click", () => {
+      state.genre = "all";
+      state.subgenre = "all";
       renderPage();
     });
-    specialtyChips.appendChild(allChip);
+    genreChips.appendChild(genreAllChip);
 
-    specialties.forEach((specialty) => {
+    genres.forEach((genre) => {
       const chip = document.createElement("button");
       chip.type = "button";
-      chip.className = `filter-chip ${state.specialty === specialty ? "active" : ""}`.trim();
-      chip.textContent = specialty;
+      chip.className = `filter-chip ${state.genre === genre ? "active" : ""}`.trim();
+      chip.textContent = genre;
       chip.addEventListener("click", () => {
-        state.specialty = specialty;
+        state.genre = genre;
+        state.subgenre = "all";
         renderPage();
       });
-      specialtyChips.appendChild(chip);
+      genreChips.appendChild(chip);
     });
+    genreWrap.append(genreTitle, genreChips);
 
-    specialtyWrap.append(specialtyTitle, specialtyChips);
+    const subgenreWrap = document.createElement("div");
+    subgenreWrap.className = "filter-group";
+    const subgenreTitle = document.createElement("span");
+    subgenreTitle.className = "filter-label";
+    subgenreTitle.textContent = "Sous-genre";
+    const subgenreChips = document.createElement("div");
+    subgenreChips.className = "filter-chip-row";
 
-    const infoWrap = document.createElement("div");
-    const infoTitle = document.createElement("strong");
-    infoTitle.textContent = roleMeta.label;
-    const infoText = document.createElement("div");
-    infoText.className = "summary-strip";
-    infoText.textContent = `${rows.length} profil(s) disponible(s)`;
-    infoWrap.append(infoTitle, infoText);
+    const subgenreAllChip = document.createElement("button");
+    subgenreAllChip.type = "button";
+    subgenreAllChip.className = `filter-chip ${state.subgenre === "all" ? "active" : ""}`.trim();
+    subgenreAllChip.textContent = "Tous";
+    subgenreAllChip.addEventListener("click", () => {
+      state.subgenre = "all";
+      renderPage();
+    });
+    subgenreChips.appendChild(subgenreAllChip);
 
-    filters.append(specialtyWrap, infoWrap);
+    subgenres.forEach((subgenre) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = `filter-chip ${state.subgenre === subgenre ? "active" : ""}`.trim();
+      chip.textContent = subgenre;
+      chip.addEventListener("click", () => {
+        state.subgenre = subgenre;
+        renderPage();
+      });
+      subgenreChips.appendChild(chip);
+    });
+    subgenreWrap.append(subgenreTitle, subgenreChips);
+
+    const starsWrap = document.createElement("div");
+    starsWrap.className = "filter-group";
+    const starsTitle = document.createElement("span");
+    starsTitle.className = "filter-label";
+    starsTitle.textContent = "Étoiles";
+    const starsChips = document.createElement("div");
+    starsChips.className = "filter-chip-row";
+
+    const starsAllChip = document.createElement("button");
+    starsAllChip.type = "button";
+    starsAllChip.className = `filter-chip ${state.stars === "all" ? "active" : ""}`.trim();
+    starsAllChip.textContent = "Toutes";
+    starsAllChip.addEventListener("click", () => {
+      state.stars = "all";
+      renderPage();
+    });
+    starsChips.appendChild(starsAllChip);
+
+    STAR_FILTER_VALUES.forEach((starValue) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = `filter-chip ${Number(state.stars) === starValue ? "active" : ""}`.trim();
+      chip.textContent = `${String(starValue).replace(".", ",")}★`;
+      chip.addEventListener("click", () => {
+        state.stars = String(starValue);
+        renderPage();
+      });
+      starsChips.appendChild(chip);
+    });
+    starsWrap.append(starsTitle, starsChips);
+
+    if (isJournalists) {
+      filters.append(subgenreWrap, starsWrap);
+    } else {
+      filters.append(genreWrap, subgenreWrap, starsWrap);
+    }
     block.append(top, filters);
     return block;
   }
 
-  function buildRecruitTable(rows) {
+  function buildRecruitTable(rows, totalAvailable) {
     const roleMeta = getRoleMeta(state.role);
     const section = document.createElement("section");
     section.className = "game-block market-list-fixed";
@@ -223,7 +366,7 @@
 
     const head = document.createElement("thead");
     const hRow = document.createElement("tr");
-    ["Profil", "Spécialité", "Édito", "Charisme", "Notoriété", "Impact", "Salaire", "Prime", "Action"]
+    ["Profil", "Spécialité", "Édito", "Charisme", "Notoriété", "Impact", "Salaire", "Coût recrutement", "Action"]
       .forEach((label) => {
         const th = document.createElement("th");
         th.textContent = label;
@@ -236,7 +379,10 @@
       const tr = document.createElement("tr");
       const td = document.createElement("td");
       td.colSpan = 9;
-      td.textContent = `Aucun ${String(roleMeta.singular || "profil").toLowerCase()} disponible pour ce filtre.`;
+      const noneAvailable = (Number(totalAvailable) || 0) <= 0;
+      td.textContent = noneAvailable
+        ? "Aucun personnel disponible pour le moment."
+        : `Aucun ${String(roleMeta.singular || "profil").toLowerCase()} disponible avec ces filtres.`;
       tr.appendChild(td);
       body.appendChild(tr);
     } else {
@@ -299,14 +445,16 @@
   }
 
   function getFilteredRows() {
-    const search = String(state.search || "").trim().toLowerCase();
-    const specialty = String(state.specialty || "all");
+    const genre = String(state.genre || "all");
+    const subgenre = String(state.subgenre || "all");
+    const stars = String(state.stars || "all");
     return getMarket(state.role)
       .filter((item) => {
-        if (specialty !== "all" && String(item.specialty || "") !== specialty) return false;
-        if (!search) return true;
-        const haystack = `${item.fullName || ""} ${item.specialty || ""}`.toLowerCase();
-        return haystack.includes(search);
+        const parsed = parseSpecialty(item && item.specialty ? item.specialty : "", state.role);
+        if (genre !== "all" && parsed.genre !== genre) return false;
+        if (subgenre !== "all" && parsed.subgenre !== subgenre) return false;
+        if (stars !== "all" && normalizeStarBonusValue(item && item.starBonus) !== normalizeStarBonusValue(stars)) return false;
+        return true;
       })
       .sort(compareRows);
   }
@@ -315,9 +463,10 @@
     renderTabs();
     const host = document.getElementById("staffRecruitContent");
     if (!host) return;
+    const marketRows = getMarket(state.role);
     const rows = getFilteredRows();
-    const toolbar = buildToolbar(getMarket(state.role));
-    const table = buildRecruitTable(rows);
+    const toolbar = buildToolbar(marketRows);
+    const table = buildRecruitTable(rows, marketRows.length);
     host.replaceChildren(toolbar, table);
   }
 

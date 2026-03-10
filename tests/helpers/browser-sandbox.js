@@ -31,8 +31,8 @@ function createSandbox(projectRoot) {
   const localStorage = createLocalStorage();
   const window = {
     location: {
-      href: 'http://localhost/game.html',
-      pathname: '/game.html',
+      href: 'http://localhost/tableau-de-bord.html',
+      pathname: '/tableau-de-bord.html',
       search: ''
     },
     history: {

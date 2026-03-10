@@ -16,10 +16,15 @@
   const FILMS_MARKET_MAX = MARKET_PROGRAMS_PER_TYPE;
   const PROGRAM_AGE_CLASSIFICATIONS = ["TP", "-10", "-12", "-16"];
   const PROGRAM_STAR_PRICE_MULTIPLIER = {
+    0.5: 0.64,
     1: 0.72,
+    1.5: 0.79,
     2: 0.86,
+    2.5: 0.93,
     3: 1.0,
+    3.5: 1.11,
     4: 1.22,
+    4.5: 1.35,
     5: 1.48
   };
   const CATEGORY_PRICE_MULTIPLIER = {
@@ -597,11 +602,16 @@
   function getProgramClassification(sessionData, categoryId, title) {
     const seed = hashString(`${getPlayerId(sessionData)}::${categoryId}::program_meta::${title}`);
     const roll = seed % 100;
-    // Weighted rarity: higher stars are intentionally less frequent.
-    const stars = roll < 30 ? 1
-      : roll < 58 ? 2
-      : roll < 80 ? 3
+    // Weighted rarity on half-star steps: higher stars remain intentionally less frequent.
+    const stars = roll < 12 ? 0.5
+      : roll < 27 ? 1
+      : roll < 42 ? 1.5
+      : roll < 56 ? 2
+      : roll < 68 ? 2.5
+      : roll < 79 ? 3
+      : roll < 88 ? 3.5
       : roll < 94 ? 4
+      : roll < 98 ? 4.5
       : 5;
     // Keep -16 less frequent for non-crypted channel context.
     const ageRoll = (seed >>> 3) % 100;
@@ -636,7 +646,8 @@
   }
 
   function getPriceFromStars(basePrice, stars, program, categoryId) {
-    const starMultiplier = PROGRAM_STAR_PRICE_MULTIPLIER[stars] || 1;
+    const normalizedStars = normalizeStarRating(stars, { allowHalf: true, fallback: 1 });
+    const starMultiplier = PROGRAM_STAR_PRICE_MULTIPLIER[normalizedStars] || 1;
     const categoryMultiplier = CATEGORY_PRICE_MULTIPLIER[categoryId] || 6.5;
     const floor = CATEGORY_PRICE_FLOOR[categoryId] || 200000;
     const seasons = Number(program && program.seasons) || 0;
@@ -656,7 +667,8 @@
         price: program && Number(program.price) > 0 ? Number(program.price) : 0,
         duration: 60,
         stars: null,
-        ageRating: null
+        ageRating: null,
+        productionMode: null
       };
     }
     const classification = (() => {
@@ -689,12 +701,20 @@
     const duration = Number(program.duration) > 0
       ? Number(program.duration)
       : getProgramDurationMinutes(category.id, program.title);
+    const ownedDetail = sessionData ? ensureOwnedProgramDetails(sessionData)[program.title] : null;
+    const productionModeRaw = ownedDetail && typeof ownedDetail.productionMode === "string"
+      ? ownedDetail.productionMode
+      : (typeof program.productionMode === "string" ? program.productionMode : "");
+    const productionMode = String(productionModeRaw || "").trim().toLowerCase() === "recorded"
+      ? "recorded"
+      : (String(productionModeRaw || "").trim().toLowerCase() === "direct" ? "direct" : null);
     return {
       title: program.title,
       price: getPriceFromStars(program.price, classification.stars, program, category.id),
       duration,
       stars: classification.stars,
-      ageRating: classification.ageRating
+      ageRating: classification.ageRating,
+      productionMode
     };
   }
 
@@ -803,8 +823,10 @@
 
   function pickStarterStars(seed) {
     const roll = seed % 100;
-    if (roll < 46) return 1;
-    if (roll < 92) return 2;
+    if (roll < 20) return 1;
+    if (roll < 45) return 1.5;
+    if (roll < 75) return 2;
+    if (roll < 93) return 2.5;
     return 3;
   }
 
@@ -1093,6 +1115,8 @@
       return {
         title: raw,
         categoryId: found ? found.category.id : "",
+        productionMode: null,
+        subtype: "",
         season: null,
         episode: null
       };
@@ -1103,7 +1127,16 @@
     const categoryId = (typeof raw.categoryId === "string" && raw.categoryId) || (found ? found.category.id : "");
     const season = Number(raw.season) > 0 ? Number(raw.season) : null;
     const episode = Number(raw.episode) > 0 ? Number(raw.episode) : null;
-    return { title, categoryId, season, episode };
+    return {
+      title,
+      categoryId,
+      productionMode: String(raw.productionMode || "").trim().toLowerCase() === "recorded"
+        ? "recorded"
+        : (String(raw.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+      subtype: String(raw.subtype || ""),
+      season,
+      episode
+    };
   }
 
   function normalizeGridDay(dayRaw) {
@@ -1193,11 +1226,27 @@
     const opts = options || {};
     const useExternalStatus = Boolean(opts.useExternalStatus);
     const { seenTitles, seenEpisodesByTitle, titleBroadcastCounts } = seenMap;
+    const productionMode = String(program && program.productionMode || "").trim().toLowerCase();
+    if (productionMode === "direct") {
+      return {
+        status: "direct",
+        diffusionCount: titleBroadcastCounts.get(program.title) || 0
+      };
+    }
+    if (categoryId === "information" && productionMode !== "recorded") {
+      return {
+        status: "direct",
+        diffusionCount: titleBroadcastCounts.get(program.title) || 0
+      };
+    }
     if (
       (diffusionRules && typeof diffusionRules.isAlwaysIneditCategory === "function" && diffusionRules.isAlwaysIneditCategory(categoryId))
       || categoryId === "information"
     ) {
-      return { status: "inedit" };
+      return {
+        status: "inedit",
+        diffusionCount: titleBroadcastCounts.get(program.title) || 0
+      };
     }
     if (!isEpisodicProgram(program)) {
       if (useExternalStatus && program.externalStatus === "rediffusion" && !seenTitles.has(program.title)) {
@@ -1394,6 +1443,7 @@
       duration: enriched.duration,
       stars: enriched.stars,
       ageRating: enriched.ageRating,
+      productionMode: enriched.productionMode || null,
       productionSubtype,
       seasons,
       episodesPerSeason,
@@ -1605,6 +1655,7 @@
     const categoryId = String(data.categoryId || "").trim();
     const subtype = String(data.subtype || "").trim();
     const duration = Number(data.duration);
+    const productionModeRaw = String(data.productionMode || "").trim().toLowerCase();
     const requestedAgeRating = String(data.ageRating || "TP");
     const starsOverride = Number(data.starsOverride);
     const presenterId = String(data.presenterId || "").trim();
@@ -1655,6 +1706,7 @@
     const ownedDetails = ensureOwnedProgramDetails(sessionData);
     const owned = ensureOwnedTitles(sessionData);
     const safeSubtype = subtype || (categoryId === "information" ? "JT" : "Société");
+    const productionMode = productionModeRaw === "recorded" ? "recorded" : "direct";
     const allowedInfoRatings = new Set(["TP", "-10", "-12", "-16"]);
     const resolvedAgeRating = categoryId === "information"
       ? (safeSubtype === "Faits divers" && allowedInfoRatings.has(requestedAgeRating) ? requestedAgeRating : "TP")
@@ -1669,7 +1721,7 @@
       stars: resolvedStars,
       ageRating: resolvedAgeRating,
       productionSubtype: safeSubtype,
-      productionMode: categoryId === "information" ? "direct" : "studio",
+      productionMode,
       producedAt: new Date().toISOString(),
       presenterId: presenterId || null,
       presenterName: presenterName || null,

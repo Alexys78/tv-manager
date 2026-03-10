@@ -1,4 +1,4 @@
-(function marketApp() {
+(function marcheProgrammesApp() {
   const catalog = window.ProgramCatalog;
   const bank = window.PlayerBank;
   const diffusionRules = window.DiffusionRules;
@@ -87,11 +87,13 @@
 
   function createStatusBadge(kind, categoryId) {
     const badge = document.createElement("span");
-    const normalized = kind === "rediffusion" ? "rediffusion" : "inedit";
+    const normalized = kind === "rediffusion"
+      ? "rediffusion"
+      : (kind === "direct" ? "direct" : "inedit");
     badge.className = `status-badge ${normalized}`;
     badge.textContent = (diffusionRules && typeof diffusionRules.getStatusLabel === "function")
       ? diffusionRules.getStatusLabel(normalized, categoryId)
-      : (normalized === "rediffusion" ? "Rediffusion" : "Inédit");
+      : (normalized === "rediffusion" ? "Rediffusion" : (normalized === "direct" ? "En direct" : "Inédit"));
     return badge;
   }
 
@@ -110,7 +112,10 @@
   }
 
   function getProgramStatus(program) {
-    return (program && program.diffusion && program.diffusion.status === "rediffusion") ? "rediffusion" : "inedit";
+    const raw = String(program && program.diffusion && program.diffusion.status || "").trim().toLowerCase();
+    if (raw === "rediffusion") return "rediffusion";
+    if (raw === "direct") return "direct";
+    return "inedit";
   }
 
   function getProgramDuration(program) {
@@ -118,7 +123,7 @@
   }
 
   function getProgramStars(program) {
-    return Math.max(0, Number(program && program.stars) || 0);
+    return normalizeStars(program && program.stars);
   }
 
   function getProgramAge(program) {
@@ -313,7 +318,19 @@
 
     const starsGroup = buildChipGroup(
       "Étoiles",
-      [{ value: "all", label: "Toutes" }, { value: "1", label: "1★" }, { value: "2", label: "2★" }, { value: "3", label: "3★" }, { value: "4", label: "4★" }, { value: "5", label: "5★" }],
+      [
+        { value: "all", label: "Toutes" },
+        { value: "0.5", label: "0,5★" },
+        { value: "1", label: "1★" },
+        { value: "1.5", label: "1,5★" },
+        { value: "2", label: "2★" },
+        { value: "2.5", label: "2,5★" },
+        { value: "3", label: "3★" },
+        { value: "3.5", label: "3,5★" },
+        { value: "4", label: "4★" },
+        { value: "4.5", label: "4,5★" },
+        { value: "5", label: "5★" }
+      ],
       String(state.filters.stars),
       (value) => {
         state.filters.stars = value;

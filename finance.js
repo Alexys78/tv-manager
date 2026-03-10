@@ -202,12 +202,25 @@
 
   function normalizeGridEntry(raw) {
     if (!raw) return null;
-    if (typeof raw === "string") return { title: raw, categoryId: "", season: null, episode: null };
+    if (typeof raw === "string") {
+      return {
+        title: raw,
+        categoryId: "",
+        productionMode: null,
+        subtype: "",
+        season: null,
+        episode: null
+      };
+    }
     const title = String(raw.title || "");
     if (!title) return null;
     return {
       title,
       categoryId: String(raw.categoryId || ""),
+      productionMode: String(raw.productionMode || "").trim().toLowerCase() === "recorded"
+        ? "recorded"
+        : (String(raw.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+      subtype: String(raw.subtype || ""),
       season: Number(raw.season) > 0 ? Number(raw.season) : null,
       episode: Number(raw.episode) > 0 ? Number(raw.episode) : null
     };

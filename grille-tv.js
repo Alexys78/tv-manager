@@ -1,4 +1,4 @@
-(function plannerApp() {
+(function grilleTvApp() {
   const appKeys = (window.SessionUtils && window.SessionUtils.APP_KEYS) || {};
   const WEEK_GRID_KEY_PREFIX = appKeys.WEEK_GRID_KEY_PREFIX || "tv_manager_week_grid_";
   const LEGACY_GRID_KEY_PREFIX = appKeys.LEGACY_GRID_KEY_PREFIX || "tv_manager_grid_";
@@ -29,6 +29,7 @@
   };
 
   const DIFFUSION_LABELS = {
+    direct: "En direct",
     inedit: "Inédit",
     rediffusion: "Rediffusion"
   };
@@ -229,6 +230,8 @@
     return {
       title: "",
       categoryId: "",
+      productionMode: null,
+      subtype: "",
       season: null,
       episode: null,
       fixedStartMinute: null,
@@ -247,6 +250,8 @@
     return {
       title: entry.title || "",
       categoryId: entry.categoryId || "",
+      productionMode: entry.productionMode || null,
+      subtype: entry.subtype || "",
       season: entry.season || null,
       episode: entry.episode || null,
       fixedStartMinute: normalizeFixedStartMinute(entry.fixedStartMinute),
@@ -262,6 +267,8 @@
       return {
         title: raw,
         categoryId,
+        productionMode: null,
+        subtype: "",
         season: isEpisodicCategory(categoryId) ? 1 : null,
         episode: isEpisodicCategory(categoryId) ? 1 : null,
         fixedStartMinute: null,
@@ -282,6 +289,10 @@
     return {
       title,
       categoryId,
+      productionMode: String(raw.productionMode || "").trim().toLowerCase() === "recorded"
+        ? "recorded"
+        : (String(raw.productionMode || "").trim().toLowerCase() === "direct" ? "direct" : null),
+      subtype: String(raw.subtype || ""),
       season,
       episode,
       fixedStartMinute: normalizeFixedStartMinute(raw.fixedStartMinute),
@@ -787,6 +798,8 @@
       return normalizeEntry({
         title: payload.title,
         categoryId: payload.categoryId,
+        productionMode: payload.productionMode || null,
+        subtype: payload.subtype || "",
         season: next.season,
         episode: next.episode
       });
@@ -794,6 +807,8 @@
     return normalizeEntry({
       title: payload.title,
       categoryId: payload.categoryId,
+      productionMode: payload.productionMode || null,
+      subtype: payload.subtype || "",
       season: null,
       episode: null
     });
@@ -976,8 +991,9 @@
     duration.textContent = `${getProgramDuration(programTitle, category.id)} min`;
     right.appendChild(duration);
 
+    let meta = null;
     if (catalog && typeof catalog.getProgramMeta === "function") {
-      const meta = catalog.getProgramMeta(programTitle);
+      meta = catalog.getProgramMeta(programTitle);
       if (meta && Number(meta.stars) > 0) {
         right.appendChild(createFilmStarsBadge(meta.stars));
       }
@@ -1007,11 +1023,23 @@
       event.dataTransfer.effectAllowed = "copy";
       event.dataTransfer.setData(
         "text/plain",
-        JSON.stringify({ kind: "program", title: programTitle, categoryId: category.id })
+        JSON.stringify({
+          kind: "program",
+          title: programTitle,
+          categoryId: category.id,
+          productionMode: meta && typeof meta.productionMode === "string" ? meta.productionMode : "",
+          subtype: meta && typeof meta.productionSubtype === "string" ? meta.productionSubtype : ""
+        })
       );
     });
     card.addEventListener("dblclick", () => {
-      addProgramFromLibraryToDay({ kind: "program", title: programTitle, categoryId: category.id });
+      addProgramFromLibraryToDay({
+        kind: "program",
+        title: programTitle,
+        categoryId: category.id,
+        productionMode: meta && typeof meta.productionMode === "string" ? meta.productionMode : "",
+        subtype: meta && typeof meta.productionSubtype === "string" ? meta.productionSubtype : ""
+      });
     });
     return card;
   }
@@ -1061,7 +1089,7 @@
     }
     return {
       duration: getProgramDuration(title, categoryId),
-      stars: 0,
+      stars: 0.5,
       ageRating: "",
       diffusionCount: 0
     };
@@ -1363,10 +1391,8 @@
       const badge = document.createElement("span");
       badge.className = `status-badge ${status || "neutral"}`;
       badge.textContent = (diffusionRules && typeof diffusionRules.getStatusLabel === "function")
-        ? diffusionRules.getStatusLabel(status, entry.categoryId)
-        : ((entry.categoryId === "information" && status === "inedit")
-          ? "En direct"
-          : (DIFFUSION_LABELS[status] || "-"));
+        ? diffusionRules.getStatusLabel(status, entry.categoryId, entry)
+        : (DIFFUSION_LABELS[status] || "-");
       metaCell.appendChild(badge);
 
       if (finance && typeof finance.estimateProgramCost === "function") {
