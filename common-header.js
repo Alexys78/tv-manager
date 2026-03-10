@@ -462,7 +462,7 @@
     ];
     const personnelsEntries = [
       { page: "personnel-owned", id: "openPersonnelBtn", label: "Mon personnel", path: "personnel.html" },
-      { page: "personnel-recruitment", id: "openRecruitmentBtn", label: "Recrutement", path: "presenters.html" }
+      { page: "personnel-recruitment", id: "openRecruitmentBtn", label: "Recrutement", path: "recrutement.html" }
     ];
 
     menu.append(

@@ -1,4 +1,4 @@
-(function presentersPageInit() {
+(function recruitmentPageInit() {
   const sessionUtils = window.SessionUtils;
   const presenterEngine = window.PresenterEngine;
   const session = sessionUtils && typeof sessionUtils.requireSession === "function"
@@ -19,7 +19,7 @@
   }
 
   function setFeedback(message, type) {
-    const node = document.getElementById("presentersFeedback");
+    const node = document.getElementById("recruitmentFeedback");
     if (!node) return;
     node.textContent = String(message || "");
     node.className = message ? `feedback ${type || "success"}` : "feedback";

@@ -8,7 +8,12 @@
   const DAY_END_MINUTE = Number(window.SessionUtils && window.SessionUtils.DAY_END_MINUTE) || (25 * 60);
   const DEFAULT_MAX_SET_PEOPLE = 3;
   const STUDIO_OPTIONS = [
-    { id: "studio_1", name: "Studio TV 1", maxPeopleOnSet: 3, allowedCategoryIds: ["information"] }
+    {
+      id: "studio_1",
+      name: "Studio TV 1",
+      maxPeopleOnSet: 3,
+      allowedCategoryIds: ["information", "divertissement", "documentaires", "jeunesse", "magazines", "realite", "culture"]
+    }
   ];
   const bank = window.PlayerBank;
   const programCatalog = window.ProgramCatalog;
@@ -46,24 +51,68 @@
     "Santé": 1.0,
     "Sport flash": 0.85
   };
+  const STAFF_ROLE_BY_TYPE = Object.freeze({
+    information: "journalists",
+    divertissement: "presenters",
+    documentaires: "presenters",
+    jeunesse: "presenters",
+    magazines: "presenters",
+    realite: "presenters",
+    culture: "presenters"
+  });
+  const STAFF_UI_BY_ROLE = Object.freeze({
+    journalists: {
+      singular: "journaliste",
+      singularTitle: "Journaliste",
+      plural: "journalistes",
+      pluralTitle: "Journalistes",
+      coPrefix: "Co-journaliste"
+    },
+    presenters: {
+      singular: "présentateur",
+      singularTitle: "Présentateur",
+      plural: "présentateurs",
+      pluralTitle: "Présentateurs",
+      coPrefix: "Co-présentateur"
+    }
+  });
   const SUBTYPE_SPECIALTY_MAP = {
     JT: ["jt"],
-    "Météo": ["jt", "matinale"],
-    "Économie": ["eco"],
-    Politique: ["debat", "societe"],
+    "Météo": ["meteo"],
+    "Économie": ["economie"],
+    Politique: ["politique"],
     Matinale: ["matinale"],
     International: ["international"],
     "Faits divers": ["faits divers"],
     Culture: ["culture"],
-    "Santé": ["societe"],
-    "Sport flash": ["jt", "societe"],
-    "Talk-show": ["debat", "societe"],
-    "Société": ["societe", "debat"],
+    "Santé": ["sante"],
+    "Sport flash": ["sport flash"],
+    "Talk-show": ["talk-show"],
+    "Société": ["societe"],
     "Culture": ["culture"],
-    "Investigation": ["faits divers", "societe"],
-    "Conso": ["eco", "societe"],
-    "Jeu": ["matinale", "societe"],
-    "Variété": ["culture", "societe"]
+    "Investigation": ["investigation"],
+    "Conso": ["consommation", "conso"],
+    "Jeu": ["jeu tv", "jeu"],
+    "Variété": ["variete"],
+    "Prime": ["prime"],
+    "Talent-show": ["talent-show", "talent show", "talent"],
+    "Lifestyle": ["lifestyle"],
+    "Éducatif": ["educatif"],
+    "Animation": ["animation"],
+    "Aventure": ["aventure"],
+    "Découverte": ["decouverte"],
+    "Nature": ["nature"],
+    "Histoire": ["histoire"],
+    "Science": ["science"],
+    "Compétition": ["competition"],
+    "Vie quotidienne": ["vie quotidienne"],
+    "Cuisine": ["cuisine"],
+    "Dating": ["dating"],
+    "Concert": ["concert"],
+    "Théâtre": ["theatre"],
+    "Opéra": ["opera"],
+    "Danse": ["danse"],
+    "Arts visuels": ["arts visuels"]
   };
   const DEFAULT_TYPE_DEFINITIONS = [
     { id: "information", name: "Informations" },
@@ -74,7 +123,7 @@
     { id: "realite", name: "Télé-réalité" },
     { id: "culture", name: "Culture & Musique" }
   ];
-  const EXCLUDED_STUDIO_TYPES = new Set(["films", "series", "magazines"]);
+  const EXCLUDED_STUDIO_TYPES = new Set(["films", "series"]);
   const WEEKDAY_OPTIONS = [
     { value: 1, label: "Lundi" },
     { value: 2, label: "Mardi" },
@@ -379,7 +428,7 @@
       });
 
       if (workdays.size > 5) {
-        const name = presenterNamesById[presenterId] || "Journaliste";
+        const name = presenterNamesById[presenterId] || "Intervenant";
         return {
           ok: false,
           message: `${name} dépasse la limite de 5 jours d'antenne par semaine.`
@@ -553,15 +602,21 @@
       .slice(0, 80);
   }
 
-  function listOwnedPresenters() {
+  function getStaffRoleForType(typeId) {
+    const safeType = String(typeId || "").trim();
+    return STAFF_ROLE_BY_TYPE[safeType] || "journalists";
+  }
+
+  function listOwnedStaffByRole(role) {
+    const safeRole = String(role || "").trim();
     if (!presenterEngine) return [];
-    if (typeof presenterEngine.getOwnedJournalistsForCurrentSession === "function") {
+    if (typeof presenterEngine.getOwnedStaffByRoleForCurrentSession === "function") {
+      return presenterEngine.getOwnedStaffByRoleForCurrentSession(safeRole);
+    }
+    if (safeRole === "journalists" && typeof presenterEngine.getOwnedJournalistsForCurrentSession === "function") {
       return presenterEngine.getOwnedJournalistsForCurrentSession();
     }
-    if (typeof presenterEngine.getOwnedStaffByRoleForCurrentSession === "function") {
-      return presenterEngine.getOwnedStaffByRoleForCurrentSession("journalists");
-    }
-    if (typeof presenterEngine.getOwnedPresentersForCurrentSession === "function") {
+    if (safeRole === "presenters" && typeof presenterEngine.getOwnedPresentersForCurrentSession === "function") {
       return presenterEngine.getOwnedPresentersForCurrentSession();
     }
     return [];
@@ -580,7 +635,7 @@
     const required = subtypeKey ? SUBTYPE_SPECIALTY_MAP[subtypeKey] : [];
     if (!required.length) return false;
     const specialty = normalizeToken(presenter && presenter.specialty);
-    return required.some((item) => specialty === normalizeToken(item));
+    return required.some((item) => specialty.includes(normalizeToken(item)));
   }
 
   function computeEffectivePresenterBonus(presenter, subtype) {
@@ -643,6 +698,8 @@
   const ageRatingLabel = document.getElementById("productionAgeRatingLabel");
   const runsLabel = document.getElementById("productionRunsLabel");
   const secondStartLabel = document.getElementById("productionSecondStartLabel");
+  const presentersCountLabel = document.getElementById("productionPresentersCountLabel");
+  const presentersListLabel = document.getElementById("productionPresentersListLabel");
   if (
     !form || !studioSelect || !typeSelect || !typeButtons || !subtypeSelect || !subtypeButtons || !durationSelect || !durationButtons
     || !recurrenceModeSelect || !recurrenceButtons || !nameInput || !dateInput || !recurringStartInput
@@ -650,6 +707,7 @@
     || !ageRatingSelect || !ageRatingButtons || !presentersCountSelect || !presentersCountButtons || !guestsCountSelect
     || !guestsCountButtons || !presentersWrap || !setupCostPreview || !perRunCostPreview || !starsPreview
     || !peoplePreview || !singleDateLabel || !recurringDaysLabel || !ageRatingLabel || !runsLabel || !secondStartLabel
+    || !presentersCountLabel || !presentersListLabel
   ) return;
 
   const typeDefinitions = (() => {
@@ -668,6 +726,20 @@
 
   function getSelectedStudio() {
     return getStudioById(studioSelect.value);
+  }
+
+  function getCurrentStaffRole() {
+    return getStaffRoleForType(typeSelect.value || "information");
+  }
+
+  function getCurrentStaffUi() {
+    return STAFF_UI_BY_ROLE[getCurrentStaffRole()] || STAFF_UI_BY_ROLE.journalists;
+  }
+
+  function refreshStaffRoleLabels() {
+    const ui = getCurrentStaffUi();
+    presentersCountLabel.textContent = `Nombre de ${ui.plural}`;
+    presentersListLabel.textContent = `${ui.pluralTitle} sélectionnés`;
   }
 
   function getAllowedTypeIdsForStudio() {
@@ -725,6 +797,9 @@
         typeSelect.value = type.id;
         renderSubtypeButtons();
         renderDurationControl();
+        refreshStaffRoleLabels();
+        refreshStudioCapacityHelp();
+        initPeopleControls();
         syncSubtypeUi();
         syncRunsUi();
         refreshSimulation();
@@ -852,7 +927,8 @@
     if (!capacityHelp) return;
     const studio = getSelectedStudio();
     const capacity = getCurrentSetCapacity();
-    capacityHelp.textContent = `Limite ${studio.name}: ${capacity} personnes max sur le plateau (journalistes + invités). Chaque journaliste est limité à 5 jours d'antenne par semaine. Les étoiles viennent du studio TV (max 3) + du niveau des journalistes (max 2). Avec plusieurs journalistes, le bonus étoiles est accordé seulement si tous atteignent le niveau requis.`;
+    const ui = getCurrentStaffUi();
+    capacityHelp.textContent = `Limite ${studio.name}: ${capacity} personnes max sur le plateau (${ui.plural} + invités). Chaque ${ui.singular} est limité à 5 jours d'antenne par semaine. Les étoiles viennent du studio TV (max 3) + du niveau des ${ui.plural} (max 2). Avec plusieurs ${ui.plural}, le bonus étoiles est accordé seulement si tous atteignent le niveau requis.`;
   }
 
   function getSelectedRecurringDays() {
@@ -893,11 +969,12 @@
       })
     );
     studioSelect.value = STUDIO_OPTIONS[0] ? STUDIO_OPTIONS[0].id : "studio_1";
+    refreshStaffRoleLabels();
     refreshStudioCapacityHelp();
   }
 
   function getOwnedPresentersMap() {
-    const list = listOwnedPresenters();
+    const list = listOwnedStaffByRole(getCurrentStaffRole());
     const map = {};
     list.forEach((presenter) => {
       map[presenter.id] = presenter;
@@ -951,7 +1028,8 @@
   }
 
   function presenterSlotLabel(index) {
-    return index === 0 ? "Journaliste" : `Co-journaliste ${index}`;
+    const ui = getCurrentStaffUi();
+    return index === 0 ? ui.singularTitle : `${ui.coPrefix} ${index}`;
   }
 
   function buildPresenterSelect(index, selectedId, presenters) {
@@ -987,10 +1065,11 @@
   }
 
   function renderPresenterSelectors() {
-    const presenters = listOwnedPresenters();
+    const presenters = listOwnedStaffByRole(getCurrentStaffRole());
     const count = Math.max(1, Number(presentersCountSelect.value) || 1);
+    const ui = getCurrentStaffUi();
     if (presenters.length === 0) {
-      presentersWrap.innerHTML = '<p class="studio-presenter-empty">Aucun journaliste recruté. Recrute dans Personnels &gt; Recrutement.</p>';
+      presentersWrap.innerHTML = `<p class="studio-presenter-empty">Aucun ${ui.singular} recruté. Recrute dans Personnels &gt; Recrutement.</p>`;
       return;
     }
     const previous = getSelectedPresenterIds();
@@ -1002,18 +1081,19 @@
   }
 
   function validateSelectedPresenters(presentersMap) {
+    const ui = getCurrentStaffUi();
     const selectedIds = getSelectedPresenterIds();
     const expected = Math.max(1, Number(presentersCountSelect.value) || 1);
     if (selectedIds.length !== expected) {
-      return { ok: false, message: "Sélectionne tous les journalistes requis." };
+      return { ok: false, message: `Sélectionne tous les ${ui.plural} requis.` };
     }
     const uniqueIds = Array.from(new Set(selectedIds));
     if (uniqueIds.length !== selectedIds.length) {
-      return { ok: false, message: "Un journaliste ne peut être sélectionné qu'une seule fois sur le même programme." };
+      return { ok: false, message: `Un ${ui.singular} ne peut être sélectionné qu'une seule fois sur le même programme.` };
     }
     const selected = uniqueIds.map((id) => presentersMap[id]).filter(Boolean);
     if (selected.length !== expected) {
-      return { ok: false, message: "Sélection de journaliste invalide." };
+      return { ok: false, message: `Sélection de ${ui.singular} invalide.` };
     }
     return { ok: true, selectedIds: uniqueIds, selected };
   }
@@ -1061,7 +1141,9 @@
   }
 
   function initPeopleControls() {
-    const presenters = listOwnedPresenters();
+    refreshStaffRoleLabels();
+    refreshStudioCapacityHelp();
+    const presenters = listOwnedStaffByRole(getCurrentStaffRole());
     const maxPresenters = Math.max(1, Math.min(getCurrentSetCapacity(), presenters.length || 1));
     const current = Math.max(1, Math.min(maxPresenters, Number(presentersCountSelect.value) || 1));
     presentersCountSelect.replaceChildren(
@@ -1133,6 +1215,7 @@
     refreshSimulation();
   });
   studioSelect.addEventListener("change", () => {
+    refreshStaffRoleLabels();
     refreshStudioCapacityHelp();
     renderTypeButtons();
     renderSubtypeButtons();

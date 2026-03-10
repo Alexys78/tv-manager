@@ -21,7 +21,37 @@
       idPrefix: "pr",
       recruitCategory: "recrutement_presentateurs",
       fireCategory: "licenciement_presentateurs",
-      specialties: ["JT", "Débat", "Éco", "Culture", "Société", "Matinale", "International", "Faits divers"]
+      specialties: [
+        "Divertissements · Jeu TV",
+        "Divertissements · Talk-show",
+        "Divertissements · Variété",
+        "Divertissements · Humour",
+        "Divertissements · Prime",
+        "Divertissements · Talent-show",
+        "Documentaires · Histoire",
+        "Documentaires · Science",
+        "Documentaires · Nature",
+        "Documentaires · Investigation",
+        "Jeunesse · Animation",
+        "Jeunesse · Éducatif",
+        "Jeunesse · Aventure",
+        "Jeunesse · Découverte",
+        "Magazines · Société",
+        "Magazines · Consommation",
+        "Magazines · Culture",
+        "Magazines · Lifestyle",
+        "Magazines · Investigation",
+        "Culture & Musique · Concert",
+        "Culture & Musique · Théâtre",
+        "Culture & Musique · Opéra",
+        "Culture & Musique · Danse",
+        "Culture & Musique · Arts visuels",
+        "Télé-réalité · Compétition",
+        "Télé-réalité · Vie quotidienne",
+        "Télé-réalité · Aventure",
+        "Télé-réalité · Cuisine",
+        "Télé-réalité · Dating"
+      ]
     },
     journalists: {
       id: "journalists",
@@ -31,11 +61,37 @@
       idPrefix: "jr",
       recruitCategory: "recrutement_journalistes",
       fireCategory: "licenciement_journalistes",
-      specialties: ["JT", "Météo", "Économie", "Politique", "Matinale", "International", "Faits divers", "Culture", "Santé", "Sport flash"]
+      specialties: [
+        "Informations · JT",
+        "Informations · Météo",
+        "Informations · Économie",
+        "Informations · Politique",
+        "Informations · Matinale",
+        "Informations · International",
+        "Informations · Faits divers",
+        "Informations · Culture",
+        "Informations · Santé",
+        "Informations · Sport flash"
+      ]
     }
   });
 
   const ROLE_KEYS = Object.freeze(Object.keys(ROLE_CONFIG));
+  const LEGACY_INFO_SPECIALTIES = new Set([
+    "jt",
+    "debat",
+    "eco",
+    "economie",
+    "culture",
+    "societe",
+    "matinale",
+    "international",
+    "faits divers",
+    "meteo",
+    "sante",
+    "sport flash",
+    "politique"
+  ]);
 
   const FIRST_NAMES = [
     "Camille", "Nora", "Lina", "Maya", "Eva", "Sarah", "Lou", "Inès", "Zoé", "Manon",
@@ -122,6 +178,14 @@
     return Math.max(min, Math.min(max, Number(value) || 0));
   }
 
+  function normalizeText(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
   function seededRandom(seed) {
     let state = seed >>> 0;
     return function next() {
@@ -203,7 +267,12 @@
     if (!id || !fullName) return null;
 
     const fallbackSpecialty = roleConfig.specialties[0] || "JT";
-    const specialty = String(raw.specialty || fallbackSpecialty).trim() || fallbackSpecialty;
+    let specialty = String(raw.specialty || fallbackSpecialty).trim() || fallbackSpecialty;
+    if (roleKey === "presenters" && LEGACY_INFO_SPECIALTIES.has(normalizeText(specialty))) {
+      const pool = ROLE_CONFIG.presenters.specialties;
+      const idx = Math.abs(hashString(`${id}:${fullName}:${specialty}`)) % pool.length;
+      specialty = pool[idx];
+    }
     const editorial = Math.round(clamp(raw.editorial, 35, 98));
     const charisma = Math.round(clamp(raw.charisma, 35, 98));
     const notoriety = Math.round(clamp(raw.notoriety, 20, 98));
