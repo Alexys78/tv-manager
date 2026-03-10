@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Studio TV</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="game-layout">
+    <section class="game-card">
+      <header id="appHeader" data-active-page="studio"></header>
+
+      <div class="studio-page-head">
+        <h1>Studio TV</h1>
+        <button id="openStudioProductionModalBtn" type="button" class="studio-launch-btn" data-nav-path="studio-production.html">Lancer une production</button>
+      </div>
+
+      <div class="studio-grid">
+        <section class="game-block studio-card">
+          <div class="studio-head">
+            <h2>Studio TV 1</h2>
+            <div class="studio-head-actions">
+              <button id="toggleStudioCardBtn" type="button" class="secondary-btn studio-card-toggle-btn" aria-expanded="true">Réduire</button>
+              <span class="day-badge">Actif</span>
+            </div>
+          </div>
+          <div id="studioCardBody">
+          <div class="studio-metrics studio-section">
+            <h3>Description</h3>
+            <div class="studio-badge-row">
+              <span class="studio-metric"><strong>100 m²</strong> de plateau</span>
+              <span class="studio-metric"><strong>1</strong> production simultanée</span>
+              <span class="studio-metric"><strong>3</strong> personnes max sur le plateau</span>
+            </div>
+          </div>
+          <div class="studio-capabilities studio-section">
+            <h3>Production possible</h3>
+            <div class="studio-badge-row">
+              <span class="studio-metric">Informations</span>
+            </div>
+          </div>
+          <div class="studio-capabilities">
+            <h3>Équipements du studio TV</h3>
+            <div id="studioUpgradesList" class="studio-upgrades-list"></div>
+            <p id="studioUpgradeFeedback" class="feedback" aria-live="polite"></p>
+          </div>
+
+          <div class="studio-capabilities">
+            <h3>Planning studio TV</h3>
+            <div id="studioPlanningFilters" class="studio-planning-filters"></div>
+            <div id="studioPlanningList" class="studio-planning-list"></div>
+          </div>
+          </div>
+        </section>
+
+      </div>
+    </section>
+  </main>
+
+  <div id="studioProductionModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="studioProductionModalTitle">
+    <div class="modal-card studio-modal-card">
+      <div class="studio-modal-head">
+        <h2 id="studioProductionModalTitle">Nouvelle production</h2>
+      </div>
+      <form id="studioProductionForm" class="studio-production-form">
+        <div class="studio-form-grid">
+          <label id="productionTypeLabel">Type</label>
+          <span id="productionTypeStatic" class="studio-form-static">Informations</span>
+          <input id="productionTypeSelect" type="hidden" value="information" />
+
+          <label id="productionSubtypeLabel" for="productionSubtypeSelect">Sous-type</label>
+          <select id="productionSubtypeSelect"></select>
+
+          <label id="productionDurationLabel" for="productionDurationSelect">Durée</label>
+          <select id="productionDurationSelect"></select>
+
+          <label id="productionRecurrenceModeLabel" for="productionRecurrenceModeSelect">Diffusion</label>
+          <select id="productionRecurrenceModeSelect">
+            <option value="single">Non récurrent</option>
+            <option value="recurring">Récurrent</option>
+          </select>
+
+          <label for="productionNameInput">Nom du programme</label>
+          <input id="productionNameInput" type="text" maxlength="70" placeholder="Ex: Le Journal du Midi" required />
+
+          <label for="productionPresenterSelect">Présentateur</label>
+          <select id="productionPresenterSelect" required></select>
+
+          <label for="productionDateInput" id="productionDateLabel">Date de diffusion</label>
+          <input id="productionDateInput" type="date" required />
+
+          <label id="productionRecurringStartLabel" class="hidden" for="productionRecurringStartDateInput">Premier jour de diffusion</label>
+          <input id="productionRecurringStartDateInput" class="hidden" type="date" />
+
+          <label id="productionRecurringDaysLabel" class="hidden">Jours récurrents (5 max)</label>
+          <div id="productionRecurringDaysWrap" class="studio-recurring-days hidden">
+            <label class="studio-recurring-day"><input type="checkbox" value="1" /> Lundi</label>
+            <label class="studio-recurring-day"><input type="checkbox" value="2" /> Mardi</label>
+            <label class="studio-recurring-day"><input type="checkbox" value="3" /> Mercredi</label>
+            <label class="studio-recurring-day"><input type="checkbox" value="4" /> Jeudi</label>
+            <label class="studio-recurring-day"><input type="checkbox" value="5" /> Vendredi</label>
+            <label class="studio-recurring-day"><input type="checkbox" value="6" /> Samedi</label>
+            <label class="studio-recurring-day"><input type="checkbox" value="0" /> Dimanche</label>
+          </div>
+
+          <label id="productionAgeRatingLabel" class="hidden" for="productionAgeRatingSelect">Classification</label>
+          <select id="productionAgeRatingSelect" class="hidden">
+            <option value="TP">TP</option>
+            <option value="-10">-10</option>
+            <option value="-12">-12</option>
+            <option value="-16">-16</option>
+          </select>
+
+          <label for="productionStartInput">Heure de début</label>
+          <input id="productionStartInput" type="time" step="300" required />
+
+          <label id="productionRunsLabel" class="hidden" for="productionDailyRunsSelect">Passages par jour</label>
+          <select id="productionDailyRunsSelect" class="hidden">
+            <option value="1">1 passage</option>
+            <option value="2">2 passages</option>
+          </select>
+
+          <label id="productionSecondStartLabel" class="hidden" for="productionSecondStartInput">Heure du 2e passage</label>
+          <input id="productionSecondStartInput" class="hidden" type="time" step="300" />
+
+          <label id="productionSetupCostLabel">Coût de mise en production</label>
+          <span id="productionSetupCostPreview" class="studio-form-static">-</span>
+
+          <label id="productionPerRunCostLabel">Coût par programmation</label>
+          <span id="productionPerRunCostPreview" class="studio-form-static">-</span>
+        </div>
+        <p id="studioCostHelp" class="studio-cost-help">La mise en production est payée à la validation. Le coût par programmation est débité dans le résultat de la veille.</p>
+        <div class="studio-form-actions">
+          <button id="studioEditCancelBtn" type="button" class="secondary-btn">Annuler</button>
+          <button type="submit">Planifier la production</button>
+        </div>
+      </form>
+      <p id="studioProductionFeedback" class="feedback" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div id="studioDetailsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="studioDetailsModalTitle">
+    <div class="modal-card">
+      <h2 id="studioDetailsModalTitle">Détails de la production</h2>
+      <div id="studioDetailsModalBody" class="modal-body-text"></div>
+      <div class="modal-actions">
+        <button id="closeStudioDetailsModalBtn" type="button" class="secondary-btn">Fermer</button>
+        <button id="editStudioDetailsModalBtn" type="button" class="secondary-btn">Modifier</button>
+        <button id="deleteStudioDetailsModalBtn" type="button" class="secondary-btn">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="studioDeleteModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="studioDeleteModalTitle">
+    <div class="modal-card">
+      <h2 id="studioDeleteModalTitle">Supprimer un programme</h2>
+      <div id="studioDeleteModalBody" class="modal-body-text"></div>
+      <div class="modal-actions">
+        <button id="closeStudioDeleteModalBtn" type="button" class="secondary-btn">Fermer</button>
+        <button id="cancelStudioDeleteModalBtn" type="button" class="secondary-btn">Annuler</button>
+        <button id="confirmStudioDeleteModalBtn" type="button">Valider la suppression</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="session-utils.js"></script>
+  <script src="core/state-schema.js"></script>
+  <script src="core/storage-adapter.js"></script>
+  <script src="core/store.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="sync-cloud.js"></script>
+  <script src="common-header.js"></script>
+  <script src="bank.js"></script>
+  <script src="finance.js"></script>
+  <script src="presenter-engine.js"></script>
+  <script src="diffusion-rules.js"></script>
+  <script src="program-catalog.js"></script>
+  <script src="studio.js"></script>
+</body>
+</html>

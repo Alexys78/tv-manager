@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Connexion</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="auth-layout">
+    <section class="auth-card">
+      <div class="auth-brand">
+        <img
+          src="images/logo.png"
+          alt="TV Manager"
+          class="auth-logo"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+        />
+        <h1 class="auth-brand-fallback">TV Manager</h1>
+      </div>
+
+      <form id="loginForm" class="auth-form">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required />
+
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" minlength="6" required />
+
+        <button type="submit">Se connecter</button>
+      </form>
+
+      <p class="auth-switch">
+        Inscriptions temporairement fermées.
+      </p>
+      <p id="feedback" class="feedback" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

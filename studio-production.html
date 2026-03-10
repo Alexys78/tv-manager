@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Lancer une production studio TV</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="game-layout">
+    <section class="game-card">
+      <header id="appHeader" data-active-page="studio"></header>
+
+      <h1>Lancer une production studio TV</h1>
+
+      <section class="game-block studio-production-page-card">
+        <form id="studioProductionPageForm" class="studio-production-form">
+          <div class="studio-production-layout">
+            <div class="studio-production-left">
+              <div class="studio-form-grid">
+                <label for="productionNameInput">Nom du programme</label>
+                <input id="productionNameInput" type="text" maxlength="70" placeholder="Ex: Le Journal du Midi" required />
+
+                <label for="productionStudioSelect">Studio TV</label>
+                <select id="productionStudioSelect"></select>
+
+                <label for="productionTypeSelect">Type</label>
+                <div id="productionTypeButtons" class="studio-chip-row"></div>
+                <select id="productionTypeSelect" class="hidden"></select>
+
+                <label for="productionSubtypeSelect">Sous-type</label>
+                <div id="productionSubtypeButtons" class="studio-chip-row"></div>
+                <select id="productionSubtypeSelect" class="hidden"></select>
+
+                <label id="productionAgeRatingLabel" class="hidden" for="productionAgeRatingSelect">Classification</label>
+                <div id="productionAgeRatingButtons" class="studio-chip-row hidden">
+                  <button type="button" class="filter-chip" data-value="TP">TP</button>
+                  <button type="button" class="filter-chip" data-value="-10">-10</button>
+                  <button type="button" class="filter-chip" data-value="-12">-12</button>
+                  <button type="button" class="filter-chip" data-value="-16">-16</button>
+                </div>
+                <select id="productionAgeRatingSelect" class="hidden">
+                  <option value="TP">TP</option>
+                  <option value="-10">-10</option>
+                  <option value="-12">-12</option>
+                  <option value="-16">-16</option>
+                </select>
+
+                <label for="productionDurationSelect">Durée</label>
+                <div id="productionDurationButtons" class="studio-chip-row"></div>
+                <select id="productionDurationSelect" class="hidden"></select>
+
+                <label for="productionRecurrenceModeSelect">Récurrent</label>
+                <div id="productionRecurrenceButtons" class="studio-chip-row">
+                  <button type="button" class="filter-chip" data-value="single">Non</button>
+                  <button type="button" class="filter-chip" data-value="recurring">Oui</button>
+                </div>
+                <select id="productionRecurrenceModeSelect" class="hidden">
+                  <option value="single">Non récurrent</option>
+                  <option value="recurring">Récurrent</option>
+                </select>
+
+                <label for="productionDateInput" id="productionDateLabel">Date de diffusion</label>
+                <input id="productionDateInput" type="date" required />
+
+                <label for="productionRecurringStartDateInput" id="productionRecurringStartLabel" class="hidden">Date de la première diffusion</label>
+                <input id="productionRecurringStartDateInput" class="hidden" type="date" />
+
+                <label id="productionRecurringDaysLabel" class="hidden">Jours de diffusion (5 max)</label>
+                <div id="productionRecurringDaysWrap" class="studio-chip-row hidden"></div>
+
+                <label id="productionRunsLabel" class="hidden" for="productionDailyRunsSelect">Nombre de diffusion par jour</label>
+                <div id="productionDailyRunsButtons" class="studio-chip-row hidden">
+                  <button type="button" class="filter-chip" data-value="1">1 diffusion</button>
+                  <button type="button" class="filter-chip" data-value="2">2 diffusions</button>
+                </div>
+                <select id="productionDailyRunsSelect" class="hidden">
+                  <option value="1">1 passage</option>
+                  <option value="2">2 passages</option>
+                </select>
+
+                <label for="productionStartInput" id="productionStartLabel">Heure de diffusion</label>
+                <input id="productionStartInput" type="time" step="300" required />
+
+                <label id="productionSecondStartLabel" class="hidden" for="productionSecondStartInput">Heure de la 2e diffusion</label>
+                <input id="productionSecondStartInput" class="hidden" type="time" step="300" />
+
+                <label for="productionPresentersCountSelect">Nombre de présentateurs</label>
+                <div id="productionPresentersCountButtons" class="studio-chip-row"></div>
+                <select id="productionPresentersCountSelect" class="hidden"></select>
+
+                <label for="productionGuestsCountSelect">Nombre d'invités</label>
+                <div id="productionGuestsCountButtons" class="studio-chip-row"></div>
+                <select id="productionGuestsCountSelect" class="hidden"></select>
+
+                <label>Présentateurs sélectionnés</label>
+                <div id="productionPresentersSelectWrap" class="studio-production-presenters-wrap"></div>
+              </div>
+            </div>
+
+            <aside class="studio-production-right">
+              <div class="studio-production-sim">
+                <h2>Simulation</h2>
+                <div class="studio-production-sim-grid">
+                  <div class="studio-production-sim-card">
+                    <span>Étoiles prévues</span>
+                    <strong id="productionStarsPreview">-</strong>
+                  </div>
+                  <div class="studio-production-sim-card">
+                    <span>Coût de mise en production</span>
+                    <strong id="productionSetupCostPreview">-</strong>
+                  </div>
+                  <div class="studio-production-sim-card">
+                    <span>Coût de diffusion</span>
+                    <strong id="productionPerRunCostPreview">-</strong>
+                  </div>
+                  <div class="studio-production-sim-card">
+                    <span>Personnes sur le plateau</span>
+                    <strong id="productionSetPeoplePreview">-</strong>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="studio-form-actions">
+            <button id="studioProductionBackBtn" type="button" class="secondary-btn">Retour studio TV</button>
+            <button type="submit">Planifier la production</button>
+          </div>
+        </form>
+        <p id="studioProductionFeedback" class="feedback" aria-live="polite"></p>
+      </section>
+    </section>
+  </main>
+
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="session-utils.js"></script>
+  <script src="core/state-schema.js"></script>
+  <script src="core/storage-adapter.js"></script>
+  <script src="core/store.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="sync-cloud.js"></script>
+  <script src="common-header.js"></script>
+  <script src="bank.js"></script>
+  <script src="finance.js"></script>
+  <script src="presenter-engine.js"></script>
+  <script src="diffusion-rules.js"></script>
+  <script src="program-catalog.js"></script>
+  <script src="studio-production.js"></script>
+</body>
+</html>

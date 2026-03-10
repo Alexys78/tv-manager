@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Inscription</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="auth-layout">
+    <section class="auth-card">
+      <h1>Créer un compte</h1>
+      <p>Les inscriptions sont actuellement fermées.</p>
+
+      <form id="registerForm" class="auth-form">
+        <label for="username">Nom du joueur</label>
+        <input id="username" name="username" type="text" minlength="3" maxlength="20" required />
+
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required />
+
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" minlength="6" required />
+
+        <label for="confirmPassword">Confirmer le mot de passe</label>
+        <input id="confirmPassword" name="confirmPassword" type="password" minlength="6" required />
+
+        <button type="submit">S'inscrire</button>
+      </form>
+
+      <p class="auth-switch">
+        Tu as déjà un compte ?
+        <a href="index.html">Se connecter</a>
+      </p>
+      <p id="feedback" class="feedback" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

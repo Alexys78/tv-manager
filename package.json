@@ -1,0 +1,16 @@
+{
+  "name": "codex",
+  "version": "1.0.0",
+  "description": "",
+  "main": "admin.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:logic": "node --test tests/program-catalog.logic.test.js tests/audience.logic.test.js",
+    "test:smoke": "node --test tests/smoke.pages.test.js",
+    "test:syntax": "for f in *.js; do /opt/homebrew/bin/node --check \"$f\" || exit 1; done"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

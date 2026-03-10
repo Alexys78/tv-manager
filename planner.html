@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Éditeur de grille</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="game-layout">
+    <section class="game-card">
+      <header id="appHeader" data-active-page="planner"></header>
+
+      <h1>Éditeur de grille</h1>
+
+      <div class="planner-days-nav">
+        <button id="prevDatesBtn" type="button" class="day-nav-btn" aria-label="Jours précédents">◀</button>
+        <div class="planner-days" id="dayTabs"></div>
+        <button id="nextDatesBtn" type="button" class="day-nav-btn" aria-label="Jours suivants">▶</button>
+      </div>
+
+      <div class="planner-grid">
+        <section class="game-block library-block">
+          <h2>Vos programmes disponibles</h2>
+          <div class="program-filters-advanced">
+            <div class="program-filters-head">
+              <span>Filtres</span>
+              <div class="program-filters-head-actions">
+                <button id="toggleLibraryFiltersBtn" type="button" class="secondary-btn">Rétracter</button>
+                <button id="resetLibraryFiltersBtn" type="button" class="secondary-btn">Réinitialiser</button>
+              </div>
+            </div>
+
+            <div id="libraryFiltersBody" class="library-filters-body">
+            <div class="filter-group">
+              <label class="filter-label" for="programSearchInput">Recherche</label>
+              <input
+                id="programSearchInput"
+                class="program-search-input"
+                type="search"
+                placeholder="Rechercher un programme..."
+              />
+            </div>
+
+            <div class="filter-group">
+              <span class="filter-label">Classification</span>
+              <div id="ageRatingFilters" class="filter-chip-row">
+                <button type="button" class="filter-chip active" data-age-rating="all">Toutes</button>
+                <button type="button" class="filter-chip" data-age-rating="TP">TP</button>
+                <button type="button" class="filter-chip" data-age-rating="-10">-10</button>
+                <button type="button" class="filter-chip" data-age-rating="-12">-12</button>
+                <button type="button" class="filter-chip" data-age-rating="-16">-16</button>
+                <button type="button" class="filter-chip" data-age-rating="-18">-18</button>
+              </div>
+            </div>
+
+            <div class="filter-group">
+              <span class="filter-label">Étoiles</span>
+              <div id="starsFilters" class="filter-chip-row">
+                <button type="button" class="filter-chip active" data-stars="all">Toutes</button>
+                <button type="button" class="filter-chip" data-stars="1">1★</button>
+                <button type="button" class="filter-chip" data-stars="2">2★</button>
+                <button type="button" class="filter-chip" data-stars="3">3★</button>
+                <button type="button" class="filter-chip" data-stars="4">4★</button>
+                <button type="button" class="filter-chip" data-stars="5">5★</button>
+              </div>
+            </div>
+
+            <div class="filter-group">
+              <span class="filter-label">Durée</span>
+              <div id="durationFilters" class="filter-chip-row">
+                <button type="button" class="filter-chip active" data-duration="all">Toutes</button>
+                <button type="button" class="filter-chip" data-duration="5">5 min</button>
+                <button type="button" class="filter-chip" data-duration="15">15 min</button>
+                <button type="button" class="filter-chip" data-duration="30">30 min</button>
+                <button type="button" class="filter-chip" data-duration="45">45 min</button>
+                <button type="button" class="filter-chip" data-duration="60">60 min</button>
+                <button type="button" class="filter-chip" data-duration="90">90 min</button>
+                <button type="button" class="filter-chip" data-duration="120">120 min</button>
+              </div>
+            </div>
+
+            <div class="filter-group">
+              <span class="filter-label">Diffusion</span>
+              <div id="diffusionStatusFilters" class="filter-chip-row">
+                <button type="button" class="filter-chip active" data-diffusion-status="all">Toutes</button>
+                <button type="button" class="filter-chip" data-diffusion-status="inedit">Inédit</button>
+                <button type="button" class="filter-chip" data-diffusion-status="rediffusion">Rediffusion</button>
+              </div>
+            </div>
+            </div>
+          </div>
+          <div id="programLibrary" class="program-library"></div>
+        </section>
+
+        <section class="game-block schedule-editor-block">
+          <div class="schedule-head">
+            <h2 id="currentDayTitle">Grille</h2>
+          </div>
+          <div class="day-controls-row">
+            <button id="saveWeekBtn" type="button">Sauvegarder</button>
+            <button id="publishDayBtn" type="button">Publier la grille</button>
+            <button id="resetDayBtn" type="button" class="secondary-btn">Réinitialiser le jour</button>
+            <button id="copyToDayBtn" type="button" class="secondary-btn">Copier ce jour vers</button>
+            <select id="targetDaySelect" class="day-select"></select>
+          </div>
+          <p id="plannerFeedback" class="feedback" aria-live="polite"></p>
+          <div id="dayScheduleSlots" class="day-slots"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="plannerPublishModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="plannerPublishModalTitle">
+    <div class="modal-card">
+      <h2 id="plannerPublishModalTitle">Publier la grille</h2>
+      <div id="plannerPublishModalBody" class="modal-body-text"></div>
+      <div class="modal-actions">
+        <button id="cancelPlannerPublishBtn" type="button" class="secondary-btn">Annuler</button>
+        <button id="confirmPlannerPublishBtn" type="button">Valider la publication</button>
+      </div>
+    </div>
+  </div>
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="session-utils.js"></script>
+  <script src="core/state-schema.js"></script>
+  <script src="core/storage-adapter.js"></script>
+  <script src="core/store.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="sync-cloud.js"></script>
+  <script src="common-header.js"></script>
+  <script src="bank.js"></script>
+  <script src="finance.js"></script>
+  <script src="diffusion-rules.js"></script>
+  <script src="program-catalog.js"></script>
+  <script src="planner.js"></script>
+</body>
+</html>

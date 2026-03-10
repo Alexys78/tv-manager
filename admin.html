@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="game-layout">
+    <section class="game-card">
+      <header id="appHeader" data-active-page="admin"></header>
+
+      <h1>Administration des audiences</h1>
+
+      <div class="game-block">
+        <h2>Calcul Veille</h2>
+        <p id="adminStatusText">Chargement...</p>
+        <div class="actions-row">
+          <button id="runYesterdayCalcBtn" type="button">Calculer la veille maintenant</button>
+          <button id="forceYesterdayCalcBtn" type="button" class="secondary-btn">Forcer le recalcul de la veille</button>
+        </div>
+        <p id="adminFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="game-block">
+        <h2>Résultat financier de la veille</h2>
+        <p id="financeStatusText">Chargement...</p>
+        <div class="actions-row">
+          <button id="runYesterdayFinanceBtn" type="button">Calculer le résultat de la veille</button>
+          <button id="forceYesterdayFinanceBtn" type="button" class="secondary-btn">Forcer le recalcul du résultat</button>
+        </div>
+        <p id="financeFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="game-block">
+        <h2>Ajouter des fonds</h2>
+        <div class="copy-row">
+          <input id="addFundsInput" class="admin-funds-input" type="number" min="1" step="1" placeholder="Montant en €" />
+          <button id="addFundsBtn" type="button">Valider</button>
+        </div>
+        <p id="fundsFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="game-block admin-market-block">
+        <h2>Marché des programmes</h2>
+        <div class="actions-row admin-market-actions">
+          <button id="regenerateAllMarketsBtn" type="button">Tout régénérer</button>
+        </div>
+        <div id="marketRegenerateButtons" class="market-regenerate-list"></div>
+        <p id="marketFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="game-block admin-market-block">
+        <h2>Recrutement du personnel</h2>
+        <div class="actions-row admin-market-actions">
+          <button id="regenerateAllRecruitmentBtn" type="button">Tout renouveler</button>
+        </div>
+        <div id="recruitmentRegenerateButtons" class="market-regenerate-list"></div>
+        <p id="recruitmentFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="game-block">
+        <h2>Studio</h2>
+        <div class="actions-row">
+          <button id="resetStudioOptionsBtn" type="button" class="secondary-btn">Réinitialiser les options du studio</button>
+        </div>
+        <p id="studioFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+      <div class="game-block">
+        <h2>Compte</h2>
+        <div class="actions-row">
+          <button id="deleteAccountBtn" type="button" class="admin-danger-btn">Supprimer mon compte</button>
+        </div>
+        <p id="accountFeedback" class="feedback" aria-live="polite"></p>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="session-utils.js"></script>
+  <script src="core/state-schema.js"></script>
+  <script src="core/storage-adapter.js"></script>
+  <script src="core/store.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="sync-cloud.js"></script>
+  <script src="common-header.js"></script>
+  <script src="diffusion-rules.js"></script>
+  <script src="audience-engine.js"></script>
+  <script src="audience-results.js"></script>
+  <script src="bank.js"></script>
+  <script src="program-catalog.js"></script>
+  <script src="presenter-engine.js"></script>
+  <script src="finance.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

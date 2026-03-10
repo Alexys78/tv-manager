@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Hub Joueur</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="game-layout">
+    <section class="game-card">
+      <header id="appHeader" data-active-page="dashboard"></header>
+
+      <h1 id="welcomeTitle">Bienvenue</h1>
+
+      <div class="game-block">
+        <div class="today-head">
+          <h2>Audiences de la veille</h2>
+          <span id="rankingLabel" class="day-badge"></span>
+        </div>
+        <div id="dailyRanking" class="ranking-list"></div>
+      </div>
+
+      <div class="game-block">
+        <div class="today-head">
+          <h2>Résultat de la veille</h2>
+          <span id="financeLabel" class="day-badge"></span>
+        </div>
+        <div id="financeSummary" class="finance-summary-grid"></div>
+      </div>
+
+      <div class="game-block">
+        <div class="today-head">
+          <h2>Programme du jour</h2>
+          <span id="todayLabel" class="day-badge"></span>
+        </div>
+        <div id="todayScheduleList" class="today-list"></div>
+      </div>
+    </section>
+  </main>
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="session-utils.js"></script>
+  <script src="core/state-schema.js"></script>
+  <script src="core/storage-adapter.js"></script>
+  <script src="core/store.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="sync-cloud.js"></script>
+  <script src="common-header.js"></script>
+  <script src="diffusion-rules.js"></script>
+  <script src="program-catalog.js"></script>
+  <script src="audience-engine.js"></script>
+  <script src="audience-results.js"></script>
+  <script src="bank.js"></script>
+  <script src="finance.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

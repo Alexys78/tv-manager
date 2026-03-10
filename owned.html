@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TV Manager - Vos programmes</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+</head>
+<body>
+  <main class="game-layout">
+    <section class="game-card">
+      <header id="appHeader" data-active-page="owned"></header>
+
+      <h1>Vos programmes</h1>
+      <p id="ownedFeedback" class="feedback" aria-live="polite"></p>
+
+      <div id="ownedTabs" class="market-tabs"></div>
+      <div id="ownedContent" class="market-content"></div>
+    </section>
+  </main>
+
+  <div id="sellProgramModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="sellProgramModalTitle">
+    <div class="modal-card">
+      <h2 id="sellProgramModalTitle">Vendre un programme</h2>
+      <div id="sellProgramModalBody" class="modal-body-text"></div>
+      <div class="modal-actions">
+        <button id="closeSellProgramModalBtn" type="button" class="secondary-btn">Annuler</button>
+        <button id="confirmSellProgramBtn" type="button">Valider la vente</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="storage-runtime.js"></script>
+  <script src="cloud-defaults.js"></script>
+  <script src="cloud-config.js"></script>
+  <script src="session-utils.js"></script>
+  <script src="core/state-schema.js"></script>
+  <script src="core/storage-adapter.js"></script>
+  <script src="core/store.js"></script>
+  <script src="core/bootstrap.js"></script>
+  <script src="sync-cloud.js"></script>
+  <script src="common-header.js"></script>
+  <script src="bank.js"></script>
+  <script src="finance.js"></script>
+  <script src="diffusion-rules.js"></script>
+  <script src="program-catalog.js"></script>
+  <script src="owned.js"></script>
+</body>
+</html>

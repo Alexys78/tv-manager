@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Notifications</title>
+  <desc id="desc">Icône cloche style interface</desc>
+  <g stroke="#9fe7ff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.2 9.7a4.8 4.8 0 1 1 9.6 0v3.1l1.2 2.2H6l1.2-2.2V9.7Z"/>
+    <path d="M10.3 17.3a1.7 1.7 0 0 0 3.4 0"/>
+  </g>
+</svg>
