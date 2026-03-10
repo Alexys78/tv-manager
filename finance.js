@@ -110,6 +110,7 @@
     production_studio: "Mise en production studio TV",
     publication_grille: "Publication grille",
     recrutement_presentateurs: "Recrutement présentateurs",
+    licenciement_presentateurs: "Licenciement présentateurs",
     salaires_fin_mois: "Salaires",
     maintenance_studio_fin_mois: "Maintenance studio TV",
     ajustement_admin: "Ajustement admin",

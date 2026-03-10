@@ -2,10 +2,13 @@
   const sessionUtils = window.SessionUtils;
   const appKeys = (sessionUtils && sessionUtils.APP_KEYS) || {};
   const PRESENTERS_KEY_PREFIX = appKeys.PRESENTERS_KEY_PREFIX || "tv_manager_presenters_";
+  const STUDIO_SCHEDULE_KEY_PREFIX = appKeys.STUDIO_SCHEDULE_KEY_PREFIX || "tv_manager_studio_schedule_";
   const bank = window.PlayerBank;
   const finance = window.FinanceEngine;
   const DAYS_PER_MONTH = 30;
   const MIN_MONTHLY_SALARY = 2600;
+  const TERMINATION_COST_MONTHS = 1;
+  const WEEKDAY_LABELS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 
   const SPECIALTIES = ["JT", "Débat", "Éco", "Culture", "Société", "Matinale", "International", "Faits divers"];
 
@@ -31,6 +34,10 @@
 
   function presentersKey(sessionData) {
     return `${PRESENTERS_KEY_PREFIX}${getPlayerId(sessionData)}`;
+  }
+
+  function studioScheduleKey(sessionData) {
+    return `${STUDIO_SCHEDULE_KEY_PREFIX}${getPlayerId(sessionData)}`;
   }
 
   function hashString(value) {
@@ -363,6 +370,200 @@
     return clamp(Number(presenter.starBonus) || 0, 0, 2);
   }
 
+  function readStudioSchedule(sessionData) {
+    if (!sessionData) return [];
+    try {
+      const raw = localStorage.getItem(studioScheduleKey(sessionData));
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function entryPresenterIds(entry) {
+    if (!entry || typeof entry !== "object") return [];
+    const ids = Array.isArray(entry.presenterIds)
+      ? entry.presenterIds.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    const legacy = String(entry.presenterId || "").trim();
+    if (!ids.length && legacy) ids.push(legacy);
+    return Array.from(new Set(ids));
+  }
+
+  function pad2(value) {
+    return String(Math.max(0, Math.floor(Number(value) || 0))).padStart(2, "0");
+  }
+
+  function formatMinute(value) {
+    const minute = Math.max(0, Math.floor(Number(value) || 0));
+    const h = Math.floor(minute / 60);
+    const m = minute % 60;
+    return `${pad2(h)}:${pad2(m)}`;
+  }
+
+  function formatDateForUi(dateKey) {
+    if (!dateKey) return "";
+    const parsed = sessionUtils.parseDateKey(dateKey);
+    if (!parsed) return dateKey;
+    return parsed.toLocaleDateString("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long"
+    });
+  }
+
+  function isActiveAssignment(entry, todayKey) {
+    if (!entry || typeof entry !== "object") return false;
+    const mode = entry.recurrenceMode === "recurring" ? "recurring" : "single";
+    if (mode === "single") {
+      const dateKey = String(entry.dateKey || "");
+      return Boolean(dateKey) && dateKey >= todayKey;
+    }
+    const start = String(entry.recurrenceStartDate || "");
+    const end = String(entry.recurrenceEndDate || "");
+    if (start && start > todayKey) return true;
+    return !end || end >= todayKey;
+  }
+
+  function getRecurringDays(entry) {
+    return Array.isArray(entry && entry.recurrenceDays)
+      ? entry.recurrenceDays.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+      : [];
+  }
+
+  function formatAssignmentLabel(entry) {
+    const title = String((entry && entry.title) || "Programme");
+    const start = formatMinute(entry && entry.startMinute);
+    const mode = entry && entry.recurrenceMode === "recurring" ? "recurring" : "single";
+    if (mode === "single") {
+      const dateLabel = formatDateForUi(String((entry && entry.dateKey) || ""));
+      return `${title} · ${dateLabel} · ${start}`;
+    }
+    const days = getRecurringDays(entry)
+      .map((day) => WEEKDAY_LABELS[day])
+      .filter(Boolean)
+      .join(", ");
+    return `${title} · Récurrent (${days || "-"}) · ${start}`;
+  }
+
+  function listActivePresenterAssignments(sessionData, presenterId) {
+    const id = String(presenterId || "").trim();
+    if (!sessionData || !id) return [];
+    const todayKey = toDateKey(new Date());
+    return readStudioSchedule(sessionData)
+      .filter((entry) => entryPresenterIds(entry).includes(id))
+      .filter((entry) => isActiveAssignment(entry, todayKey))
+      .map((entry) => ({
+        id: String(entry && entry.id ? entry.id : ""),
+        label: formatAssignmentLabel(entry)
+      }));
+  }
+
+  function getTerminationCost(presenter) {
+    if (!presenter || typeof presenter !== "object") return 0;
+    const monthly = Math.max(
+      MIN_MONTHLY_SALARY,
+      Math.round(Number(presenter.salaryMonthly) || Math.round((Number(presenter.salaryDaily) || 0) * DAYS_PER_MONTH))
+    );
+    return Math.max(0, Math.round(monthly * TERMINATION_COST_MONTHS));
+  }
+
+  function getTerminationStatus(sessionData, presenterId) {
+    const presenter = findOwnedPresenter(sessionData, presenterId);
+    if (!sessionData || !presenter) {
+      return {
+        ok: false,
+        code: "not_found",
+        message: "Présentateur introuvable."
+      };
+    }
+
+    const assignments = listActivePresenterAssignments(sessionData, presenterId);
+    const cost = getTerminationCost(presenter);
+    if (assignments.length > 0) {
+      return {
+        ok: false,
+        code: "assigned",
+        presenter,
+        cost,
+        assignments,
+        message: "Licenciement impossible: ce présentateur est affecté à un programme."
+      };
+    }
+
+    if (!bank || typeof bank.getBalance !== "function" || typeof bank.add !== "function") {
+      return {
+        ok: false,
+        code: "bank_unavailable",
+        presenter,
+        cost,
+        message: "Module bancaire indisponible."
+      };
+    }
+
+    const balance = Number(bank.getBalance()) || 0;
+    if (balance < cost) {
+      return {
+        ok: false,
+        code: "insufficient_funds",
+        presenter,
+        cost,
+        missing: Math.max(0, cost - balance),
+        message: "Fonds insuffisants pour payer les frais de licenciement."
+      };
+    }
+
+    return {
+      ok: true,
+      code: "ok",
+      presenter,
+      cost,
+      assignments: []
+    };
+  }
+
+  function firePresenter(sessionData, presenterId) {
+    const status = getTerminationStatus(sessionData, presenterId);
+    if (!status.ok) return status;
+    const id = String(presenterId || "").trim();
+    const store = ensureStore(sessionData);
+    if (!store.hired.some((item) => item.id === id)) {
+      return { ok: false, code: "not_found", message: "Présentateur introuvable." };
+    }
+
+    const cost = Math.max(0, Math.round(Number(status.cost) || 0));
+    const presenterName = String((status.presenter && status.presenter.fullName) || "Présentateur");
+
+    if (cost > 0) {
+      bank.add(-cost, {
+        category: "licenciement_presentateurs",
+        label: `Licenciement: ${presenterName}`
+      });
+      if (finance && typeof finance.recordTransaction === "function") {
+        finance.recordTransaction(sessionData, {
+          amount: -cost,
+          category: "licenciement_presentateurs",
+          label: `Licenciement: ${presenterName}`
+        });
+      }
+    }
+
+    const next = {
+      ...store,
+      hired: store.hired.filter((item) => item.id !== id)
+    };
+    writeStore(sessionData, next);
+    return {
+      ok: true,
+      code: "fired",
+      presenter: status.presenter,
+      cost,
+      message: `${presenterName} a été licencié.`
+    };
+  }
+
   window.PresenterEngine = {
     getOwnedPresentersForCurrentSession: function getOwnedPresentersForCurrentSession() {
       const session = getSession();
@@ -398,6 +599,16 @@
       const session = getSession();
       if (!session) return { rows: [], total: 0 };
       return getSalaryBreakdown(session);
+    },
+    getPresenterTerminationStatusForCurrentSession: function getPresenterTerminationStatusForCurrentSession(presenterId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return getTerminationStatus(session, presenterId);
+    },
+    firePresenterForCurrentSession: function firePresenterForCurrentSession(presenterId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return firePresenter(session, presenterId);
     },
     computeStarBonusFromStats
   };

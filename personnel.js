@@ -8,7 +8,8 @@
 
   const state = {
     search: "",
-    specialty: "all"
+    specialty: "all",
+    pendingFirePresenterId: ""
   };
 
   function formatEuro(value) {
@@ -18,6 +19,13 @@
   function getOwned() {
     if (!presenterEngine || typeof presenterEngine.getOwnedPresentersForCurrentSession !== "function") return [];
     return presenterEngine.getOwnedPresentersForCurrentSession();
+  }
+
+  function setFeedback(message, type) {
+    const node = document.getElementById("personnelFeedback");
+    if (!node) return;
+    node.textContent = message || "";
+    node.className = message ? `feedback ${type || "success"}` : "feedback";
   }
 
   function formatStarBonusLabel(value) {
@@ -63,9 +71,86 @@
     salaryBadge.textContent = `${formatEuro(presenter.salaryMonthly || presenter.salaryDaily || 0)} / mois`;
     meta.appendChild(salaryBadge);
 
+    const actionWrap = document.createElement("div");
+    actionWrap.className = "presenter-action-wrap";
+
+    const fireBtn = document.createElement("button");
+    fireBtn.type = "button";
+    fireBtn.className = "market-buy-btn market-sell-btn";
+    fireBtn.textContent = "Licencier";
+    fireBtn.addEventListener("click", () => {
+      openFireModal(presenter);
+    });
+    actionWrap.appendChild(fireBtn);
+
     main.append(name, meta);
-    row.append(main);
+    row.append(main, actionWrap);
     return row;
+  }
+
+  function closeFireModal() {
+    const modal = document.getElementById("firePresenterModal");
+    if (!modal) return;
+    state.pendingFirePresenterId = "";
+    modal.classList.add("hidden");
+  }
+
+  function openFireModal(presenter) {
+    const modal = document.getElementById("firePresenterModal");
+    const title = document.getElementById("firePresenterModalTitle");
+    const body = document.getElementById("firePresenterModalBody");
+    const confirmBtn = document.getElementById("confirmFirePresenterBtn");
+    if (!modal || !title || !body || !confirmBtn || !presenter) return;
+
+    const getStatus = presenterEngine && typeof presenterEngine.getPresenterTerminationStatusForCurrentSession === "function"
+      ? presenterEngine.getPresenterTerminationStatusForCurrentSession
+      : null;
+    const status = getStatus ? getStatus(presenter.id) : { ok: false, message: "Module de licenciement indisponible." };
+    const cost = Math.max(0, Number(status && status.cost) || 0);
+
+    title.textContent = `Licencier ${presenter.fullName}`;
+    body.replaceChildren();
+
+    if (status && status.ok) {
+      const confirmText = document.createElement("p");
+      confirmText.textContent = `Tu confirmes le licenciement de ${presenter.fullName} ?`;
+      const costText = document.createElement("p");
+      costText.textContent = `Frais de licenciement: ${formatEuro(cost)}.`;
+      body.append(confirmText, costText);
+      state.pendingFirePresenterId = presenter.id;
+      confirmBtn.disabled = false;
+      confirmBtn.classList.remove("hidden");
+    } else {
+      const reason = document.createElement("p");
+      reason.textContent = (status && status.message) || "Licenciement impossible.";
+      body.appendChild(reason);
+
+      if (status && Array.isArray(status.assignments) && status.assignments.length > 0) {
+        const lead = document.createElement("p");
+        lead.textContent = "Programme(s) concerné(s):";
+        body.appendChild(lead);
+        const list = document.createElement("ul");
+        list.className = "modal-list";
+        status.assignments.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = `- ${item && item.label ? item.label : "Programme"}`;
+          list.appendChild(li);
+        });
+        body.appendChild(list);
+      }
+
+      if (cost > 0) {
+        const costText = document.createElement("p");
+        costText.textContent = `Frais estimés: ${formatEuro(cost)}.`;
+        body.appendChild(costText);
+      }
+
+      state.pendingFirePresenterId = "";
+      confirmBtn.disabled = true;
+      confirmBtn.classList.add("hidden");
+    }
+
+    modal.classList.remove("hidden");
   }
 
   function renderSpecialties(list) {
@@ -129,7 +214,43 @@
     });
   }
 
+  function bindFireModal() {
+    const modal = document.getElementById("firePresenterModal");
+    const cancelBtn = document.getElementById("cancelFirePresenterBtn");
+    const confirmBtn = document.getElementById("confirmFirePresenterBtn");
+    if (!modal || !cancelBtn || !confirmBtn) return;
+
+    cancelBtn.addEventListener("click", closeFireModal);
+    confirmBtn.addEventListener("click", () => {
+      const presenterId = String(state.pendingFirePresenterId || "").trim();
+      if (!presenterId) {
+        closeFireModal();
+        return;
+      }
+      if (!presenterEngine || typeof presenterEngine.firePresenterForCurrentSession !== "function") {
+        setFeedback("Module de licenciement indisponible.", "error");
+        closeFireModal();
+        return;
+      }
+      const result = presenterEngine.firePresenterForCurrentSession(presenterId);
+      if (!result || !result.ok) {
+        setFeedback((result && result.message) || "Licenciement impossible.", "error");
+        closeFireModal();
+        renderOwned();
+        return;
+      }
+      setFeedback(`${result.message} Frais: ${formatEuro(result.cost)}.`, "success");
+      closeFireModal();
+      renderOwned();
+    });
+
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) closeFireModal();
+    });
+  }
+
   bindToolbar();
+  bindFireModal();
   renderOwned();
 
   window.addEventListener("tvmanager:cloud-sync", (event) => {
