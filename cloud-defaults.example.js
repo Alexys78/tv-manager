@@ -3,5 +3,5 @@ window.TV_MANAGER_CLOUD_DEFAULTS = {
   anonKey: "YOUR_SUPABASE_ANON_KEY",
   table: "tv_manager_state_records",
   syncToken: "default",
-  accountsTable: "tv_manager_accounts"
+  adminEmails: ["admin@example.com"]
 };

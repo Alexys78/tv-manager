@@ -11,6 +11,12 @@
   const TERMINATION_COST_MONTHS = 1;
   const MARKET_SIZE_PER_ROLE = 20;
   const WEEKDAY_LABELS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+  const STAR_SALARY_MULTIPLIER = Object.freeze({
+    presenters: Object.freeze({ 0: 0.92, 0.5: 1.06, 1: 1.24 }),
+    journalists: Object.freeze({ 0: 0.92, 0.5: 1.06, 1: 1.24 }),
+    directors: Object.freeze({ 0: 0.94, 0.5: 1.2 }),
+    producers: Object.freeze({ 0: 0.94, 0.5: 1.2 })
+  });
 
   const ROLE_CONFIG = Object.freeze({
     presenters: {
@@ -73,26 +79,114 @@
         "Informations · Santé",
         "Informations · Sport flash"
       ]
+    },
+    directors: {
+      id: "directors",
+      label: "Réalisateurs",
+      singular: "Réalisateur",
+      singularLower: "réalisateur",
+      idPrefix: "rl",
+      recruitCategory: "recrutement_realisateurs",
+      fireCategory: "licenciement_realisateurs",
+      specialties: [
+        "Informations · JT",
+        "Informations · Météo",
+        "Informations · Économie",
+        "Informations · Politique",
+        "Informations · Matinale",
+        "Informations · International",
+        "Informations · Faits divers",
+        "Informations · Culture",
+        "Informations · Santé",
+        "Informations · Sport flash",
+        "Divertissements · Jeu TV",
+        "Divertissements · Talk-show",
+        "Divertissements · Variété",
+        "Divertissements · Humour",
+        "Divertissements · Prime",
+        "Divertissements · Talent-show",
+        "Documentaires · Histoire",
+        "Documentaires · Science",
+        "Documentaires · Nature",
+        "Documentaires · Investigation",
+        "Jeunesse · Animation",
+        "Jeunesse · Éducatif",
+        "Jeunesse · Aventure",
+        "Jeunesse · Découverte",
+        "Magazines · Société",
+        "Magazines · Consommation",
+        "Magazines · Culture",
+        "Magazines · Lifestyle",
+        "Magazines · Investigation",
+        "Télé-réalité · Compétition",
+        "Télé-réalité · Vie quotidienne",
+        "Télé-réalité · Aventure",
+        "Télé-réalité · Cuisine",
+        "Télé-réalité · Dating",
+        "Culture & Musique · Concert",
+        "Culture & Musique · Théâtre",
+        "Culture & Musique · Opéra",
+        "Culture & Musique · Danse",
+        "Culture & Musique · Arts visuels",
+        "Films · Cinéma",
+        "Séries · Fiction"
+      ]
+    },
+    producers: {
+      id: "producers",
+      label: "Producteurs",
+      singular: "Producteur",
+      singularLower: "producteur",
+      idPrefix: "pd",
+      recruitCategory: "recrutement_producteurs",
+      fireCategory: "licenciement_producteurs",
+      specialties: [
+        "Informations · JT",
+        "Informations · Météo",
+        "Informations · Économie",
+        "Informations · Politique",
+        "Informations · Matinale",
+        "Informations · International",
+        "Informations · Faits divers",
+        "Informations · Culture",
+        "Informations · Santé",
+        "Informations · Sport flash",
+        "Divertissements · Jeu TV",
+        "Divertissements · Talk-show",
+        "Divertissements · Variété",
+        "Divertissements · Humour",
+        "Divertissements · Prime",
+        "Divertissements · Talent-show",
+        "Documentaires · Histoire",
+        "Documentaires · Science",
+        "Documentaires · Nature",
+        "Documentaires · Investigation",
+        "Jeunesse · Animation",
+        "Jeunesse · Éducatif",
+        "Jeunesse · Aventure",
+        "Jeunesse · Découverte",
+        "Magazines · Société",
+        "Magazines · Consommation",
+        "Magazines · Culture",
+        "Magazines · Lifestyle",
+        "Magazines · Investigation",
+        "Télé-réalité · Compétition",
+        "Télé-réalité · Vie quotidienne",
+        "Télé-réalité · Aventure",
+        "Télé-réalité · Cuisine",
+        "Télé-réalité · Dating",
+        "Culture & Musique · Concert",
+        "Culture & Musique · Théâtre",
+        "Culture & Musique · Opéra",
+        "Culture & Musique · Danse",
+        "Culture & Musique · Arts visuels",
+        "Films · Cinéma",
+        "Séries · Fiction"
+      ]
     }
   });
 
   const ROLE_KEYS = Object.freeze(Object.keys(ROLE_CONFIG));
-  const LEGACY_INFO_SPECIALTIES = new Set([
-    "jt",
-    "debat",
-    "eco",
-    "economie",
-    "culture",
-    "societe",
-    "matinale",
-    "international",
-    "faits divers",
-    "meteo",
-    "sante",
-    "sport flash",
-    "politique"
-  ]);
-
   const FIRST_NAMES = [
     "Camille", "Nora", "Lina", "Maya", "Eva", "Sarah", "Lou", "Inès", "Zoé", "Manon",
     "Lucas", "Noah", "Hugo", "Adam", "Léo", "Nolan", "Théo", "Ethan", "Tom", "Mathis",
@@ -160,7 +254,9 @@
     return {
       roles: {
         presenters: emptyRoleBucket(),
-        journalists: emptyRoleBucket()
+        journalists: emptyRoleBucket(),
+        directors: emptyRoleBucket(),
+        producers: emptyRoleBucket()
       }
     };
   }
@@ -176,14 +272,6 @@
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, Number(value) || 0));
-  }
-
-  function normalizeText(value) {
-    return String(value || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .trim();
   }
 
   function seededRandom(seed) {
@@ -248,15 +336,45 @@
     return toDateKey(getWeeklyMarketRefreshAnchor(new Date()));
   }
 
-  function computeStarBonusFromStats(stats) {
+  function getRoleStarLimits(role) {
+    const roleKey = getRoleKey(role);
+    if (roleKey === "directors" || roleKey === "producers") {
+      return { min: 0, max: 0.5 };
+    }
+    return { min: 0, max: 1 };
+  }
+
+  function clampRoleStarBonus(role, value, fallback) {
+    const limits = getRoleStarLimits(role);
+    const safeFallback = Number.isFinite(Number(fallback))
+      ? Number(fallback)
+      : limits.min;
+    const numeric = Number.isFinite(Number(value)) ? Number(value) : safeFallback;
+    const normalized = Math.round(numeric * 2) / 2;
+    return clamp(normalized, limits.min, limits.max);
+  }
+
+  function computeStarBonusFromStats(stats, role) {
     const editorial = clamp(stats && stats.editorial, 0, 100);
     const charisma = clamp(stats && stats.charisma, 0, 100);
     const notoriety = clamp(stats && stats.notoriety, 0, 100);
     const score = (editorial * 0.45) + (charisma * 0.35) + (notoriety * 0.2);
-    if (score >= 86) return 2;
-    if (score >= 76) return 1.5;
-    if (score >= 66) return 1;
-    return 0.5;
+    const roleKey = getRoleKey(role);
+    if (roleKey === "directors" || roleKey === "producers") {
+      return score >= 82 ? 0.5 : 0;
+    }
+    if (score >= 86) return 1;
+    if (score >= 72) return 0.5;
+    return 0;
+  }
+
+  function getSalaryMultiplierByRoleAndStars(role, stars) {
+    const roleKey = getRoleKey(role);
+    const perRole = STAR_SALARY_MULTIPLIER[roleKey] || STAR_SALARY_MULTIPLIER.presenters;
+    const safeStars = clampRoleStarBonus(roleKey, stars, 0);
+    const key = String(safeStars);
+    if (Object.prototype.hasOwnProperty.call(perRole, key)) return perRole[key];
+    return 1;
   }
 
   function sanitizeTalent(raw, role) {
@@ -268,28 +386,22 @@
     if (!id || !fullName) return null;
 
     const fallbackSpecialty = roleConfig.specialties[0] || "JT";
-    let specialty = String(raw.specialty || fallbackSpecialty).trim() || fallbackSpecialty;
-    if (roleKey === "presenters" && LEGACY_INFO_SPECIALTIES.has(normalizeText(specialty))) {
-      const pool = ROLE_CONFIG.presenters.specialties;
-      const idx = Math.abs(hashString(`${id}:${fullName}:${specialty}`)) % pool.length;
-      specialty = pool[idx];
-    }
+    const specialty = String(raw.specialty || fallbackSpecialty).trim() || fallbackSpecialty;
     const editorial = Math.round(clamp(raw.editorial, 35, 98));
     const charisma = Math.round(clamp(raw.charisma, 35, 98));
     const notoriety = Math.round(clamp(raw.notoriety, 20, 98));
-    const legacySalaryDaily = Math.max(0, Math.round(Number(raw.salaryDaily) || 0));
     const providedSalaryMonthly = Math.round(Number(raw.salaryMonthly));
     const salaryMonthly = Math.max(
       MIN_MONTHLY_SALARY,
       Number.isFinite(providedSalaryMonthly) && providedSalaryMonthly > 0
         ? providedSalaryMonthly
-        : legacySalaryDaily
+        : MIN_MONTHLY_SALARY
     );
     const salaryDaily = Math.max(0, Math.round(salaryMonthly / DAYS_PER_MONTH));
     const signingBonus = Math.max(0, Math.round(Number(raw.signingBonus) || 0));
     const starBonus = Number.isFinite(Number(raw.starBonus))
-      ? clamp(raw.starBonus, 0.5, 2)
-      : computeStarBonusFromStats({ editorial, charisma, notoriety });
+      ? clampRoleStarBonus(roleKey, raw.starBonus, 0)
+      : computeStarBonusFromStats({ editorial, charisma, notoriety }, roleKey);
 
     return {
       id,
@@ -327,23 +439,6 @@
       });
       return base;
     }
-
-    if (source.presenters || source.journalists) {
-      base.roles.presenters = sanitizeRoleBucket(source.presenters, "presenters");
-      base.roles.journalists = sanitizeRoleBucket(source.journalists, "journalists");
-      return base;
-    }
-
-    // Legacy format: top-level hired/market/revision/lastRefreshAnchor belonged to presenters.
-    base.roles.presenters = sanitizeRoleBucket(
-      {
-        hired: source.hired,
-        market: source.market,
-        revision: source.revision,
-        lastRefreshAnchor: source.lastRefreshAnchor
-      },
-      "presenters"
-    );
     return base;
   }
 
@@ -391,8 +486,12 @@
     const editorial = Math.round(48 + (rand() * 44));
     const charisma = Math.round(45 + (rand() * 46));
     const notoriety = Math.round(28 + (rand() * 58));
-    const starBonus = computeStarBonusFromStats({ editorial, charisma, notoriety });
-    const salaryMonthly = Math.round(2600 + (editorial * 42) + (charisma * 33) + (notoriety * 36));
+    const starBonus = computeStarBonusFromStats({ editorial, charisma, notoriety }, role);
+    const rawSalary = Math.round(2600 + (editorial * 42) + (charisma * 33) + (notoriety * 36));
+    const salaryMonthly = Math.max(
+      MIN_MONTHLY_SALARY,
+      Math.round(rawSalary * getSalaryMultiplierByRoleAndStars(role, starBonus))
+    );
     const signingBonus = Math.round(salaryMonthly * (2 + (rand() * 2.5)));
 
     return sanitizeTalent({
@@ -536,7 +635,7 @@
   function getStarBonusByRole(sessionData, role, staffId) {
     const item = findOwnedByRole(sessionData, role, staffId);
     if (!item) return 0;
-    return clamp(Number(item.starBonus) || 0.5, 0.5, 2);
+    return clampRoleStarBonus(role, item.starBonus, 0);
   }
 
   function visibleCountFromStored(store, role) {
@@ -714,8 +813,12 @@
     const ids = Array.isArray(entry.presenterIds)
       ? entry.presenterIds.map((item) => String(item || "").trim()).filter(Boolean)
       : [];
-    const legacy = String(entry.presenterId || "").trim();
-    if (!ids.length && legacy) ids.push(legacy);
+    const singlePresenterId = String(entry.presenterId || "").trim();
+    if (!ids.length && singlePresenterId) ids.push(singlePresenterId);
+    const directorId = String(entry.directorId || "").trim();
+    const producerId = String(entry.producerId || "").trim();
+    if (directorId) ids.push(directorId);
+    if (producerId) ids.push(producerId);
     return Array.from(new Set(ids));
   }
 
@@ -1047,6 +1150,70 @@
       const session = getSession();
       if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
       return fireByRole(session, "journalists", staffId);
+    },
+
+    // API explicite réalisateurs.
+    getOwnedDirectorsForCurrentSession: function getOwnedDirectorsForCurrentSession() {
+      const session = getSession();
+      if (!session) return [];
+      return getOwnedByRole(session, "directors");
+    },
+    getMarketDirectorsForCurrentSession: function getMarketDirectorsForCurrentSession() {
+      const session = getSession();
+      if (!session) return [];
+      return getMarketByRole(session, "directors");
+    },
+    hireDirectorForCurrentSession: function hireDirectorForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, message: "Session introuvable." };
+      return hireByRole(session, "directors", staffId);
+    },
+    getDirectorByIdForCurrentSession: function getDirectorByIdForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return null;
+      return findOwnedByRole(session, "directors", staffId);
+    },
+    getDirectorTerminationStatusForCurrentSession: function getDirectorTerminationStatusForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return getTerminationStatusByRole(session, "directors", staffId);
+    },
+    fireDirectorForCurrentSession: function fireDirectorForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return fireByRole(session, "directors", staffId);
+    },
+
+    // API explicite producteurs.
+    getOwnedProducersForCurrentSession: function getOwnedProducersForCurrentSession() {
+      const session = getSession();
+      if (!session) return [];
+      return getOwnedByRole(session, "producers");
+    },
+    getMarketProducersForCurrentSession: function getMarketProducersForCurrentSession() {
+      const session = getSession();
+      if (!session) return [];
+      return getMarketByRole(session, "producers");
+    },
+    hireProducerForCurrentSession: function hireProducerForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, message: "Session introuvable." };
+      return hireByRole(session, "producers", staffId);
+    },
+    getProducerByIdForCurrentSession: function getProducerByIdForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return null;
+      return findOwnedByRole(session, "producers", staffId);
+    },
+    getProducerTerminationStatusForCurrentSession: function getProducerTerminationStatusForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return getTerminationStatusByRole(session, "producers", staffId);
+    },
+    fireProducerForCurrentSession: function fireProducerForCurrentSession(staffId) {
+      const session = getSession();
+      if (!session) return { ok: false, code: "no_session", message: "Session introuvable." };
+      return fireByRole(session, "producers", staffId);
     },
 
     getSalaryBreakdownForCurrentSession: function getSalaryBreakdownForCurrentSession() {

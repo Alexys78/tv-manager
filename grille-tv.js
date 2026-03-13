@@ -1,7 +1,5 @@
 (function grilleTvApp() {
   const appKeys = (window.SessionUtils && window.SessionUtils.APP_KEYS) || {};
-  const WEEK_GRID_KEY_PREFIX = appKeys.WEEK_GRID_KEY_PREFIX || "tv_manager_week_grid_";
-  const LEGACY_GRID_KEY_PREFIX = appKeys.LEGACY_GRID_KEY_PREFIX || "tv_manager_grid_";
   const DATE_GRID_KEY_PREFIX = appKeys.DATE_GRID_KEY_PREFIX || "tv_manager_date_grid_";
   const GRID_PUBLICATION_KEY_PREFIX = appKeys.GRID_PUBLICATION_KEY_PREFIX || "tv_manager_grid_publication_";
   const catalog = window.ProgramCatalog;
@@ -79,7 +77,7 @@
     divertissement: [45, 60, 90, 120],
     films: [90, 120],
     series: [30, 45, 60],
-    magazines: [30, 45, 60, 90],
+    magazines: [30, 45, 60, 90, 120],
     jeunesse: [15, 30, 45, 60],
     documentaires: [45, 60, 90, 120],
     realite: [45, 60, 90, 120],
@@ -156,7 +154,7 @@
     return EPISODIC_CATEGORY_IDS.has(categoryId);
   }
 
-  function getEpisodicMeta(categoryId, title) {
+  function getEpisodicMeta(categoryId, title, dateKey) {
     if (!title || !isEpisodicCategory(categoryId)) return null;
     if (catalog && typeof catalog.getProgramMeta === "function") {
       const meta = catalog.getProgramMeta(title);
@@ -166,10 +164,22 @@
         && Number(meta.seasons) > 0
         && Number(meta.episodesPerSeason) > 0
       ) {
-        return {
+        const enriched = {
           seasons: Number(meta.seasons),
           episodesPerSeason: Number(meta.episodesPerSeason)
         };
+        if (catalog && typeof catalog.getProgramEpisodeAvailabilityForDateForCurrentSession === "function") {
+          const availability = catalog.getProgramEpisodeAvailabilityForDateForCurrentSession(title, dateKey || "");
+          if (availability && Number(availability.seasons) > 0 && Number(availability.episodesPerSeason) > 0) {
+            enriched.seasons = Number(availability.seasons);
+            enriched.episodesPerSeason = Number(availability.episodesPerSeason);
+            enriched.availableEpisodes = new Set(
+              (availability.availableEpisodes || []).map((item) => `S${Number(item.season) || 1}E${Number(item.episode) || 1}`)
+            );
+            enriched.availableBySeason = availability.availableBySeason || {};
+          }
+        }
+        return enriched;
       }
     }
     if (categoryId === "series") return SERIES_CATALOG[title] || null;
@@ -188,14 +198,6 @@
 
   function playerId() {
     return session.email || session.username || "player";
-  }
-
-  function weekStorageKey() {
-    return `${WEEK_GRID_KEY_PREFIX}${playerId()}`;
-  }
-
-  function legacyStorageKey() {
-    return `${LEGACY_GRID_KEY_PREFIX}${playerId()}`;
   }
 
   function dateStorageKey() {
@@ -501,56 +503,6 @@
     return items;
   }
 
-  function readLegacyWeekGrid() {
-    const empty = {
-      lundi: createEmptyDay(),
-      mardi: createEmptyDay(),
-      mercredi: createEmptyDay(),
-      jeudi: createEmptyDay(),
-      vendredi: createEmptyDay(),
-      samedi: createEmptyDay(),
-      dimanche: createEmptyDay()
-    };
-
-    const rawWeek = localStorage.getItem(weekStorageKey());
-    if (rawWeek) {
-      try {
-        const parsed = JSON.parse(rawWeek);
-        Object.keys(empty).forEach((dayKey) => {
-          empty[dayKey] = normalizeDay(parsed ? parsed[dayKey] : null);
-        });
-        return empty;
-      } catch {
-        return empty;
-      }
-    }
-
-    const rawLegacy = localStorage.getItem(legacyStorageKey());
-    if (rawLegacy) {
-      try {
-        const legacyDay = normalizeDay(JSON.parse(rawLegacy));
-        Object.keys(empty).forEach((dayKey) => {
-          empty[dayKey] = { day: legacyDay.day.map(cloneEntry) };
-        });
-        return empty;
-      } catch {
-        return empty;
-      }
-    }
-
-    return empty;
-  }
-
-  function buildDateGridFromWeek(timeline) {
-    const weekGrid = readLegacyWeekGrid();
-    const migrated = {};
-    timeline.forEach((item) => {
-      const source = normalizeDay(weekGrid[item.dayKey]).day;
-      migrated[item.key] = { day: source.map(cloneEntry) };
-    });
-    return migrated;
-  }
-
   function readDateGrid(timeline) {
     const rawDateGrid = localStorage.getItem(dateStorageKey());
     if (rawDateGrid) {
@@ -565,35 +517,16 @@
         // Fallback below.
       }
     }
-
-    const migrated = buildDateGridFromWeek(timeline);
-    localStorage.setItem(dateStorageKey(), JSON.stringify(migrated));
-    return migrated;
+    const empty = {};
+    timeline.forEach((item) => {
+      empty[item.key] = createEmptyDay();
+    });
+    localStorage.setItem(dateStorageKey(), JSON.stringify(empty));
+    return empty;
   }
 
   function saveDateGrid() {
     localStorage.setItem(dateStorageKey(), JSON.stringify(state.dateGrid));
-    saveWeekCompatibility();
-  }
-
-  function saveWeekCompatibility() {
-    const week = {
-      lundi: createEmptyDay(),
-      mardi: createEmptyDay(),
-      mercredi: createEmptyDay(),
-      jeudi: createEmptyDay(),
-      vendredi: createEmptyDay(),
-      samedi: createEmptyDay(),
-      dimanche: createEmptyDay()
-    };
-
-    Object.keys(week).forEach((dayKey) => {
-      const timelineItem = state.timeline.find((item) => item.dayKey === dayKey && !item.isYesterday);
-      if (!timelineItem) return;
-      week[dayKey] = normalizeDay(state.dateGrid[timelineItem.key]);
-    });
-
-    localStorage.setItem(weekStorageKey(), JSON.stringify(week));
   }
 
   const state = {
@@ -745,15 +678,21 @@
     return used;
   }
 
-  function getNextUndiffusedEpisodeFromUsed(categoryId, title, usedSet) {
-    const meta = getEpisodicMeta(categoryId, title) || { seasons: 1, episodesPerSeason: 1 };
+  function isEpisodeAvailable(meta, season, episode) {
+    if (!meta || !meta.availableEpisodes || !(meta.availableEpisodes instanceof Set)) return true;
+    return meta.availableEpisodes.has(`S${season}E${episode}`);
+  }
+
+  function getNextUndiffusedEpisodeFromUsed(categoryId, title, usedSet, dateKey) {
+    const meta = getEpisodicMeta(categoryId, title, dateKey) || { seasons: 1, episodesPerSeason: 1 };
     for (let season = 1; season <= meta.seasons; season += 1) {
       for (let episode = 1; episode <= meta.episodesPerSeason; episode += 1) {
         const key = `S${season}E${episode}`;
+        if (!isEpisodeAvailable(meta, season, episode)) continue;
         if (!usedSet.has(key)) return { season, episode, key };
       }
     }
-    return { season: 1, episode: 1, key: "S1E1" };
+    return null;
   }
 
   function buildCopiedDayWithFreshEpisodes(sourceEntries, targetDateKey) {
@@ -769,7 +708,10 @@
         episodicUsedMap.set(mapKey, usedSet);
       }
 
-      const next = getNextUndiffusedEpisodeFromUsed(entry.categoryId, entry.title, usedSet);
+      const next = getNextUndiffusedEpisodeFromUsed(entry.categoryId, entry.title, usedSet, targetDateKey);
+      if (!next) {
+        return cloneEntry(entry);
+      }
       usedSet.add(next.key);
       return normalizeEntry({
         title: entry.title,
@@ -780,21 +722,23 @@
     });
   }
 
-  function getFirstUndiffusedEpisode(categoryId, title, omitDateKey, omitIndex) {
-    const meta = getEpisodicMeta(categoryId, title) || { seasons: 1, episodesPerSeason: 1 };
+  function getFirstUndiffusedEpisode(categoryId, title, omitDateKey, omitIndex, targetDateKey) {
+    const meta = getEpisodicMeta(categoryId, title, targetDateKey) || { seasons: 1, episodesPerSeason: 1 };
     const used = collectUsedEpisodes(categoryId, title, omitDateKey, omitIndex);
     for (let season = 1; season <= meta.seasons; season += 1) {
       for (let episode = 1; episode <= meta.episodesPerSeason; episode += 1) {
         const key = `S${season}E${episode}`;
+        if (!isEpisodeAvailable(meta, season, episode)) continue;
         if (!used.has(key)) return { season, episode };
       }
     }
-    return { season: 1, episode: 1 };
+    return null;
   }
 
   function createEntryFromPayload(payload, indexToReplace) {
     if (isEpisodicCategory(payload.categoryId)) {
-      const next = getFirstUndiffusedEpisode(payload.categoryId, payload.title, state.selectedDateKey, indexToReplace);
+      const next = getFirstUndiffusedEpisode(payload.categoryId, payload.title, state.selectedDateKey, indexToReplace, state.selectedDateKey);
+      if (!next) return null;
       return normalizeEntry({
         title: payload.title,
         categoryId: payload.categoryId,
@@ -907,10 +851,15 @@
     const dayData = getSelectedDayData();
     const firstEmptyIndex = dayData.day.findIndex((entry) => !normalizeEntry(entry).title);
     if (firstEmptyIndex >= 0) {
+      const createdEntry = createEntryFromPayload(payload, firstEmptyIndex);
+      if (!createdEntry) {
+        setPlannerFeedback("Aucun épisode disponible à cette date pour ce programme.", "error");
+        return;
+      }
       const ok = tryApplyDayMutation(
         dayData,
         () => {
-          dayData.day[firstEmptyIndex] = createEntryFromPayload(payload, firstEmptyIndex);
+          dayData.day[firstEmptyIndex] = createdEntry;
         },
         `Programme ajouté à la première case vide (${firstEmptyIndex + 1}).`
       );
@@ -918,12 +867,17 @@
       return;
     }
 
+    const createdEntry = createEntryFromPayload(payload);
+    if (!createdEntry) {
+      setPlannerFeedback("Aucun épisode disponible à cette date pour ce programme.", "error");
+      return;
+    }
     const ok = tryApplyDayMutation(
       dayData,
       () => {
-        dayData.day.push(createEntryFromPayload(payload));
+        dayData.day.push(createdEntry);
       },
-      "Aucune case vide: programme ajouté en fin de journée."
+      "Aucune case vide : programme ajouté en fin de journée."
     );
     if (ok) renderDaySchedule();
   }
@@ -1064,7 +1018,7 @@
     if (!Array.isArray(filteredPrograms) || filteredPrograms.length === 0) {
       const empty = document.createElement("p");
       empty.className = "market-program-meta";
-      empty.textContent = "Pas de programme disponible";
+      empty.textContent = "Aucun programme disponible";
       content.replaceChildren(empty);
     } else {
       const cards = filteredPrograms.map((title) => createLibraryCard(title, category));
@@ -1220,45 +1174,75 @@
     library.replaceChildren(...sections);
   }
 
-  function getSeriesMeta(entry) {
+  function getSeriesMeta(entry, dateKey) {
     if (!entry || !entry.title || !isEpisodicCategory(entry.categoryId)) return null;
-    return getEpisodicMeta(entry.categoryId, entry.title);
+    return getEpisodicMeta(entry.categoryId, entry.title, dateKey);
   }
 
   function buildSeriesSelects(dayData, index, entry, editable) {
     const wrapper = document.createElement("div");
     wrapper.className = "series-fields";
-    const meta = getSeriesMeta(entry);
+    const meta = getSeriesMeta(entry, state.selectedDateKey);
     if (!meta) return wrapper;
+
+    const availableBySeason = meta.availableBySeason && typeof meta.availableBySeason === "object"
+      ? meta.availableBySeason
+      : null;
+    const availableSeasons = Array.from({ length: meta.seasons }, (_, idx) => idx + 1).filter((season) => {
+      if (!availableBySeason) return true;
+      return Number(availableBySeason[season]) > 0;
+    });
+    if (availableSeasons.length === 0) {
+      const locked = document.createElement("span");
+      locked.className = "series-label";
+      locked.textContent = "Indispo";
+      wrapper.append(locked);
+      return wrapper;
+    }
 
     const seasonSelect = document.createElement("select");
     seasonSelect.className = "series-input";
     seasonSelect.disabled = !editable;
 
+    const initialSeason = availableSeasons.includes(entry.season || 1)
+      ? (entry.season || 1)
+      : availableSeasons[0];
     for (let value = 1; value <= meta.seasons; value += 1) {
+      if (!availableSeasons.includes(value)) continue;
       const option = document.createElement("option");
       option.value = String(value);
       option.textContent = String(value);
-      if ((entry.season || 1) === value) option.selected = true;
+      if (initialSeason === value) option.selected = true;
       seasonSelect.appendChild(option);
     }
 
     const episodeSelect = document.createElement("select");
     episodeSelect.className = "series-input";
     episodeSelect.disabled = !editable;
-
-    for (let value = 1; value <= meta.episodesPerSeason; value += 1) {
-      const option = document.createElement("option");
-      option.value = String(value);
-      option.textContent = String(value);
-      if ((entry.episode || 1) === value) option.selected = true;
-      episodeSelect.appendChild(option);
-    }
+    const fillEpisodes = (season) => {
+      const maxEpisode = availableBySeason
+        ? Math.max(0, Number(availableBySeason[season]) || 0)
+        : meta.episodesPerSeason;
+      episodeSelect.replaceChildren();
+      if (maxEpisode <= 0) return 0;
+      const currentEpisode = Number(dayData.day[index].episode) || (entry.episode || 1);
+      const selectedEpisode = Math.min(Math.max(1, currentEpisode), maxEpisode);
+      for (let value = 1; value <= maxEpisode; value += 1) {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = String(value);
+        if (selectedEpisode === value) option.selected = true;
+        episodeSelect.appendChild(option);
+      }
+      dayData.day[index].season = Number(season);
+      dayData.day[index].episode = selectedEpisode;
+      return maxEpisode;
+    };
+    fillEpisodes(initialSeason);
 
     seasonSelect.addEventListener("change", () => {
       dayData.day[index].season = Number(seasonSelect.value);
-      const currentEpisode = dayData.day[index].episode || 1;
-      dayData.day[index].episode = Math.min(currentEpisode, meta.episodesPerSeason);
+      fillEpisodes(Number(seasonSelect.value));
       renderDaySchedule();
     });
 
@@ -1329,10 +1313,14 @@
 
       if (catalog && typeof catalog.getProgramMeta === "function") {
         const filmMeta = catalog.getProgramMeta(entry.title);
-        if (filmMeta && (Number(filmMeta.stars) > 0 || filmMeta.ageRating)) {
+        const seasonStars = filmMeta && filmMeta.seasonStars && entry.season
+          ? Number(filmMeta.seasonStars[String(entry.season)] || filmMeta.seasonStars[entry.season] || 0)
+          : 0;
+        const displayedStars = seasonStars > 0 ? seasonStars : Number(filmMeta && filmMeta.stars);
+        if (filmMeta && (displayedStars > 0 || filmMeta.ageRating)) {
           const inlineMeta = document.createElement("span");
           inlineMeta.className = "slot-program-inline-meta";
-          if (Number(filmMeta.stars) > 0) inlineMeta.appendChild(createFilmStarsBadge(filmMeta.stars));
+          if (displayedStars > 0) inlineMeta.appendChild(createFilmStarsBadge(displayedStars));
           if (filmMeta.ageRating) {
             const age = document.createElement("span");
             age.className = "film-class-badge age";
@@ -1370,6 +1358,10 @@
         const payload = tryReadProgramPayload(event);
         if (!payload) return;
         const nextEntry = createEntryFromPayload(payload, index);
+        if (!nextEntry) {
+          setPlannerFeedback("Aucun épisode disponible à cette date pour ce programme.", "error");
+          return;
+        }
         if (Number.isFinite(Number(entry.fixedStartMinute))) {
           nextEntry.fixedStartMinute = Math.floor(Number(entry.fixedStartMinute));
         }

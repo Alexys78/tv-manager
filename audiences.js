@@ -286,6 +286,9 @@
   }
 
   if (engine) {
+    const playerChannelName = sessionUtils && typeof sessionUtils.getPlayerChannelName === "function"
+      ? sessionUtils.getPlayerChannelName(session)
+      : (session.username || "Ta chaîne");
     let dayKey = getDayKeyByOffset(-1);
     let simulation = null;
     if (resultsStore) {
@@ -298,7 +301,7 @@
       const playerWeek = engine.readPlayerWeek(session);
       simulation = engine.simulateDay(
         dayKey,
-        session.username ? `${session.username} TV` : "Ta chaîne",
+        playerChannelName,
         playerWeek[dayKey]
       );
     }

@@ -103,16 +103,25 @@
     realite: 16000,
     culture: 8500
   };
+  const PRODUCTION_BUDGET_RUN_MULTIPLIER = {
+    low: 0.9,
+    medium: 1,
+    high: 1.18
+  };
   const TRANSACTION_CATEGORY_LABELS = {
-    achat_programmes: "Achat programmes",
-    vente_programmes: "Vente programmes",
+    achat_programmes: "Achat de programmes",
+    vente_programmes: "Vente de programmes",
     amelioration_studio: "Amélioration studio TV",
     production_studio: "Mise en production studio TV",
     publication_grille: "Publication grille",
     recrutement_presentateurs: "Recrutement",
     recrutement_journalistes: "Recrutement",
+    recrutement_realisateurs: "Recrutement",
+    recrutement_producteurs: "Recrutement",
     licenciement_presentateurs: "Licenciement",
     licenciement_journalistes: "Licenciement",
+    licenciement_realisateurs: "Licenciement",
+    licenciement_producteurs: "Licenciement",
     salaires_fin_mois: "Salaires",
     maintenance_studio_fin_mois: "Maintenance studio TV",
     ajustement_admin: "Ajustement admin",
@@ -828,21 +837,35 @@
   function getPresentersSalaryBreakdown(sessionData) {
     const DAYS_PER_MONTH = 30;
     const parsed = readJson(presentersStorageKey(sessionData));
-    const roleLabel = (roleKey) => (roleKey === "journalists" ? "Journaliste" : "Présentateur");
+    const roleLabelMap = {};
+    const presenterEngine = window.PresenterEngine;
+    if (presenterEngine && typeof presenterEngine.listRolesForCurrentSession === "function") {
+      const roles = presenterEngine.listRolesForCurrentSession();
+      if (Array.isArray(roles)) {
+        roles.forEach((role) => {
+          const id = String(role && role.id ? role.id : "").trim();
+          if (!id) return;
+          roleLabelMap[id] = String(role && role.singular ? role.singular : id);
+        });
+      }
+    }
+    const defaultRoleLabel = (roleKey) => {
+      if (roleLabelMap[roleKey]) return roleLabelMap[roleKey];
+      if (roleKey === "journalists") return "Journaliste";
+      if (roleKey === "presenters") return "Présentateur";
+      if (roleKey === "directors") return "Réalisateur";
+      if (roleKey === "producers") return "Producteur";
+      return "Personnel";
+    };
 
     const hiredGroups = [];
     if (parsed && parsed.roles && typeof parsed.roles === "object") {
-      hiredGroups.push(
-        { role: "presenters", list: Array.isArray(parsed.roles.presenters && parsed.roles.presenters.hired) ? parsed.roles.presenters.hired : [] },
-        { role: "journalists", list: Array.isArray(parsed.roles.journalists && parsed.roles.journalists.hired) ? parsed.roles.journalists.hired : [] }
-      );
-    } else if (parsed && (parsed.presenters || parsed.journalists)) {
-      hiredGroups.push(
-        { role: "presenters", list: Array.isArray(parsed.presenters && parsed.presenters.hired) ? parsed.presenters.hired : [] },
-        { role: "journalists", list: Array.isArray(parsed.journalists && parsed.journalists.hired) ? parsed.journalists.hired : [] }
-      );
-    } else {
-      hiredGroups.push({ role: "presenters", list: parsed && Array.isArray(parsed.hired) ? parsed.hired : [] });
+      Object.keys(parsed.roles).forEach((roleKey) => {
+        const list = Array.isArray(parsed.roles[roleKey] && parsed.roles[roleKey].hired)
+          ? parsed.roles[roleKey].hired
+          : [];
+        hiredGroups.push({ role: roleKey, list });
+      });
     }
 
     const rows = hiredGroups
@@ -852,15 +875,11 @@
           const name = String(item && item.fullName ? item.fullName : "").trim();
           const monthly = Math.max(
             0,
-            Math.round(
-              Number(item && item.salaryMonthly) > 0
-                ? Number(item && item.salaryMonthly)
-                : Number(item && item.salaryDaily) || 0
-            )
+            Math.round(Number(item && item.salaryMonthly) || 0)
           );
           const amount = Math.max(0, Math.round(monthly / DAYS_PER_MONTH));
           if (!name || amount <= 0) return null;
-          return { role: roleLabel(group.role), label: name, amount };
+          return { role: defaultRoleLabel(group.role), label: name, amount };
         });
       })
       .filter(Boolean);
@@ -872,17 +891,9 @@
     const parsed = readJson(presentersStorageKey(sessionData));
     const groups = [];
     if (parsed && parsed.roles && typeof parsed.roles === "object") {
-      groups.push(
-        Array.isArray(parsed.roles.presenters && parsed.roles.presenters.hired) ? parsed.roles.presenters.hired : [],
-        Array.isArray(parsed.roles.journalists && parsed.roles.journalists.hired) ? parsed.roles.journalists.hired : []
-      );
-    } else if (parsed && (parsed.presenters || parsed.journalists)) {
-      groups.push(
-        Array.isArray(parsed.presenters && parsed.presenters.hired) ? parsed.presenters.hired : [],
-        Array.isArray(parsed.journalists && parsed.journalists.hired) ? parsed.journalists.hired : []
-      );
-    } else {
-      groups.push(parsed && Array.isArray(parsed.hired) ? parsed.hired : []);
+      Object.keys(parsed.roles).forEach((roleKey) => {
+        groups.push(Array.isArray(parsed.roles[roleKey] && parsed.roles[roleKey].hired) ? parsed.roles[roleKey].hired : []);
+      });
     }
 
     return groups
@@ -890,11 +901,7 @@
       .reduce((sum, item) => {
         const monthly = Math.max(
           0,
-          Math.round(
-            Number(item && item.salaryMonthly) > 0
-              ? Number(item && item.salaryMonthly)
-              : (Number(item && item.salaryDaily) || 0) * 30
-          )
+          Math.round(Number(item && item.salaryMonthly) || 0)
         );
         return sum + monthly;
       }, 0);
@@ -944,23 +951,26 @@
   }
 
   function getProgramDurationAndCategory(entry) {
-    if (!entry) return { duration: 60, categoryId: "culture", productionSubtype: "" };
+    if (!entry) return { duration: 60, categoryId: "culture", productionSubtype: "", productionBudget: "medium" };
     const explicitDuration = Number(entry.duration);
     const explicitCategoryId = String(entry.categoryId || "");
     const explicitSubtype = String(entry.productionSubtype || entry.subtype || "");
+    const explicitBudget = String(entry.productionBudget || "").trim().toLowerCase();
     const safeTitle = String(entry.title || "").trim();
     if (Number.isFinite(explicitDuration) && explicitDuration > 0) {
       return {
         duration: explicitDuration,
         categoryId: explicitCategoryId || "culture",
-        productionSubtype: explicitSubtype
+        productionSubtype: explicitSubtype,
+        productionBudget: explicitBudget || "medium"
       };
     }
     if (!safeTitle) {
       return {
         duration: 60,
         categoryId: explicitCategoryId || "culture",
-        productionSubtype: explicitSubtype
+        productionSubtype: explicitSubtype,
+        productionBudget: explicitBudget || "medium"
       };
     }
     if (catalog && typeof catalog.getProgramMeta === "function") {
@@ -969,14 +979,16 @@
         return {
           duration: Number(meta.duration) > 0 ? Number(meta.duration) : 60,
           categoryId: String(meta.categoryId || entry.categoryId || "culture"),
-          productionSubtype: String(meta.productionSubtype || explicitSubtype || "")
+          productionSubtype: String(meta.productionSubtype || explicitSubtype || ""),
+          productionBudget: String(meta.productionBudget || explicitBudget || "medium").trim().toLowerCase() || "medium"
         };
       }
     }
     return {
       duration: 60,
       categoryId: String(entry.categoryId || "culture"),
-      productionSubtype: explicitSubtype
+      productionSubtype: explicitSubtype,
+      productionBudget: explicitBudget || "medium"
     };
   }
 
@@ -1037,6 +1049,10 @@
           ? sessionUtils.recoverSessionFromLocation({ persist: false })
           : null);
       multiplier *= getStudioProductionCostMultiplier(activeSession);
+    }
+    if (meta.categoryId === "information" || meta.categoryId === "magazines") {
+      const budgetKey = String(meta.productionBudget || "medium").trim().toLowerCase();
+      multiplier *= PRODUCTION_BUDGET_RUN_MULTIPLIER[budgetKey] || 1;
     }
     return Math.round(base * durationFactor * multiplier);
   }

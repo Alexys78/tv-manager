@@ -4,6 +4,7 @@
   const OWNED_KEY_PREFIX = appKeys.OWNED_KEY_PREFIX || "tv_manager_owned_programs_";
   const OWNED_DETAILS_KEY_PREFIX = appKeys.OWNED_DETAILS_KEY_PREFIX || "tv_manager_owned_program_details_";
   const STUDIO_KEY_PREFIX = appKeys.STUDIO_KEY_PREFIX || "tv_manager_studio_";
+  const STUDIO_PRODUCTIONS_KEY_PREFIX = appKeys.STUDIO_PRODUCTIONS_KEY_PREFIX || "tv_manager_studio_productions_";
   const DATE_GRID_KEY_PREFIX = appKeys.DATE_GRID_KEY_PREFIX || "tv_manager_date_grid_";
   const STUDIO_SCHEDULE_KEY_PREFIX = appKeys.STUDIO_SCHEDULE_KEY_PREFIX || "tv_manager_studio_schedule_";
   const DYNAMIC_FILMS_KEY_PREFIX = appKeys.DYNAMIC_FILMS_KEY_PREFIX || "tv_manager_dynamic_films_";
@@ -56,29 +57,90 @@
     jeunesse: 7000,
     realite: 18000
   };
+  const PRODUCTION_BUDGET_LEVELS = Object.freeze({
+    low: { id: "low", label: "Faible", setupMultiplier: 0.84, runMultiplier: 0.9, starsBonus: -0.5 },
+    medium: { id: "medium", label: "Moyen", setupMultiplier: 1, runMultiplier: 1, starsBonus: 0 },
+    high: { id: "high", label: "Élevé", setupMultiplier: 1.22, runMultiplier: 1.18, starsBonus: 0.5 }
+  });
   const CATEGORY_DURATION_OPTIONS = {
     information: [5, 15, 30, 45, 60, 90, 120],
     divertissement: [45, 60, 90, 120],
     films: [90, 120],
     series: [30, 45, 60],
-    magazines: [30, 45, 60, 90],
+    magazines: [30, 45, 60, 90, 120],
     jeunesse: [15, 30, 45, 60],
     documentaires: [45, 60, 90, 120],
     realite: [45, 60, 90, 120],
     culture: [30, 45, 60, 90]
   };
-  const LEGACY_CATEGORY_DURATION_OPTIONS = {
-    information: [5, 15, 30, 60, 90, 120],
-    divertissement: [60, 90, 120],
-    films: [90, 120],
-    series: [30, 60],
-    magazines: [30, 60, 90],
-    jeunesse: [15, 30, 60],
-    documentaires: [60, 90, 120],
-    realite: [60, 90, 120],
-    culture: [30, 60, 90]
+  const CATEGORY_SUBTYPE_OPTIONS = {
+    information: ["JT", "Météo", "Économie", "Politique", "Matinale", "International", "Faits divers", "Culture", "Santé", "Sport flash"],
+    divertissement: ["Jeu", "Variété", "Humour", "Talk-show", "Prime", "Talent-show"],
+    magazines: ["Société", "Conso", "Culture", "Santé", "Lifestyle", "Investigation"],
+    jeunesse: ["Éducatif", "Animation", "Jeu", "Aventure", "Découverte"],
+    documentaires: ["Nature", "Histoire", "Science", "Société", "Investigation"],
+    realite: ["Compétition", "Vie quotidienne", "Aventure", "Cuisine", "Dating"],
+    culture: ["Concert", "Théâtre", "Opéra", "Danse", "Arts visuels"]
   };
-
+  const SUBTYPELESS_CATEGORY_IDS = new Set(["films", "series"]);
+  const CATEGORY_SUBTYPE_KEYWORD_RULES = {
+    information: [
+      { subtype: "Météo", keywords: ["meteo"] },
+      { subtype: "Économie", keywords: ["eco", "economie", "business"] },
+      { subtype: "Politique", keywords: ["politique", "assemblee", "senat"] },
+      { subtype: "Matinale", keywords: ["matinale", "6/8", "morning", "reveil"] },
+      { subtype: "International", keywords: ["international", "monde", "etranger"] },
+      { subtype: "Faits divers", keywords: ["faits divers", "crime", "police", "accident"] },
+      { subtype: "Culture", keywords: ["culture", "arts", "spectacle"] },
+      { subtype: "Santé", keywords: ["sante", "medical", "hopital"] },
+      { subtype: "Sport flash", keywords: ["sport", "match", "flash"] },
+      { subtype: "JT", keywords: ["journal", "jt", "edition"] }
+    ],
+    divertissement: [
+      { subtype: "Talk-show", keywords: ["talk", "debat", "interview"] },
+      { subtype: "Humour", keywords: ["humour", "rire", "stand-up", "comedy"] },
+      { subtype: "Jeu", keywords: ["quiz", "jeu", "challenge", "defi"] },
+      { subtype: "Talent-show", keywords: ["talent", "stars", "champions"] },
+      { subtype: "Prime", keywords: ["prime", "soiree", "festival"] },
+      { subtype: "Variété", keywords: ["variete", "show", "spectacle"] }
+    ],
+    magazines: [
+      { subtype: "Conso", keywords: ["conso", "consommation", "auto", "budget", "maison", "deco", "deco", "cuisine"] },
+      { subtype: "Santé", keywords: ["sante", "medical", "bien-etre", "bien etre"] },
+      { subtype: "Investigation", keywords: ["enquete", "investigation", "dossier"] },
+      { subtype: "Culture", keywords: ["culture", "arts", "scene", "musique"] },
+      { subtype: "Société", keywords: ["societe", "quotidien", "regards", "focus"] },
+      { subtype: "Lifestyle", keywords: ["voyage", "evasion", "lifestyle", "vivre", "weekend", "week-end"] }
+    ],
+    jeunesse: [
+      { subtype: "Animation", keywords: ["cartoon", "animation"] },
+      { subtype: "Jeu", keywords: ["quiz", "jeu", "challenge"] },
+      { subtype: "Éducatif", keywords: ["science", "educatif", "college", "junior"] },
+      { subtype: "Aventure", keywords: ["mission", "aventuriers", "quest", "explorer"] },
+      { subtype: "Découverte", keywords: ["curieux", "decouverte", "lab", "universe"] }
+    ],
+    documentaires: [
+      { subtype: "Nature", keywords: ["terres", "ocean", "planete", "sauvage"] },
+      { subtype: "Histoire", keywords: ["histoire", "civilisation", "memoire", "histori"] },
+      { subtype: "Science", keywords: ["science", "inventeurs", "futur"] },
+      { subtype: "Investigation", keywords: ["enquete", "criminel", "investigation"] },
+      { subtype: "Société", keywords: ["societe", "monde", "routes"] }
+    ],
+    realite: [
+      { subtype: "Compétition", keywords: ["challenge", "rivals", "duel", "competition", "academy"] },
+      { subtype: "Vie quotidienne", keywords: ["loft", "coloc", "maison", "famille", "nouvelle vie"] },
+      { subtype: "Aventure", keywords: ["survie", "ranch", "mission", "aventure"] },
+      { subtype: "Cuisine", keywords: ["cuisine", "chef"] },
+      { subtype: "Dating", keywords: ["dating", "mariage", "amour"] }
+    ],
+    culture: [
+      { subtype: "Concert", keywords: ["concert", "recital", "acoustique", "musique"] },
+      { subtype: "Danse", keywords: ["ballet", "danse"] },
+      { subtype: "Théâtre", keywords: ["theatre", "piece"] },
+      { subtype: "Opéra", keywords: ["opera"] },
+      { subtype: "Arts visuels", keywords: ["arts visuels", "artistique", "culture"] }
+    ]
+  };
   const CATEGORIES = [
     { id: "information", name: "Informations", colorClass: "category-information", programs: [
       { title: "JT Quotidien", price: 25000, defaultOwned: true },
@@ -229,13 +291,32 @@
     }
   };
 
-  const CULTURE_FORMAT_SUFFIXES = [
-    "Pièce de théâtre",
-    "Concert",
-    "Opéra",
-    "Ballet",
-    "Récital"
-  ];
+  const TITLE_SUFFIX_CLEANUP_BY_CATEGORY = {
+    culture: [
+      "Pièce de théâtre",
+      "Piece de theatre",
+      "Concert",
+      "Opéra",
+      "Opera",
+      "Ballet",
+      "Récital",
+      "Recital",
+      "Danse",
+      "Théâtre",
+      "Theatre",
+      "Arts visuels"
+    ],
+    divertissement: [
+      "Jeu",
+      "Variété",
+      "Variete",
+      "Humour",
+      "Talk-show",
+      "Prime",
+      "Talent-show",
+      "Jeu TV"
+    ]
+  };
 
   const CATEGORY_DYNAMIC_CONFIG = {
     films: { generatedCount: GENERATED_FILMS_COUNT, marketMax: FILMS_MARKET_MAX },
@@ -376,7 +457,10 @@
 
   function normalizeDynamicProgramEntry(raw, categoryId) {
     if (!raw || typeof raw !== "object") return null;
-    const title = typeof raw.title === "string" ? raw.title.trim() : "";
+    const title = cleanupCategoryProgramTitle(
+      categoryId,
+      typeof raw.title === "string" ? raw.title.trim() : ""
+    );
     if (!title) return null;
     const category = categoryById(categoryId);
     const ranges = computeCategoryRanges(category || { programs: [] });
@@ -434,8 +518,7 @@
       const first = parts.first[seed % parts.first.length];
       const second = parts.second[Math.floor(seed / 3) % parts.second.length];
       const third = parts.third[Math.floor(seed / 7) % parts.third.length];
-      const format = CULTURE_FORMAT_SUFFIXES[Math.floor(seed / 11) % CULTURE_FORMAT_SUFFIXES.length];
-      let cultureTitle = `${first} ${second} ${third} - ${format}`.replace(/\s+/g, " ").trim();
+      let cultureTitle = `${first} ${second} ${third}`.replace(/\s+/g, " ").trim();
       if (usedTitles.has(cultureTitle)) {
         cultureTitle = `${cultureTitle} ${1 + (Math.floor(seed / 13) % 9)}`;
       }
@@ -502,14 +585,37 @@
 
     const key = dynamicCategoryKey(sessionData, categoryId);
     let dynamicPrograms = [];
+    let shouldRewriteStore = false;
     const raw = localStorage.getItem(key);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
+          const seenNormalizedTitles = new Set();
           dynamicPrograms = parsed
             .map((entry) => normalizeDynamicProgramEntry(entry, categoryId))
-            .filter(Boolean);
+            .filter((entry) => {
+              if (!entry) return false;
+              const normalized = normalizeToken(entry.title);
+              if (!normalized || seenNormalizedTitles.has(normalized)) {
+                shouldRewriteStore = true;
+                return false;
+              }
+              seenNormalizedTitles.add(normalized);
+              return true;
+            });
+          if (Array.isArray(parsed) && parsed.length !== dynamicPrograms.length) {
+            shouldRewriteStore = true;
+          } else if (Array.isArray(parsed)) {
+            for (let i = 0; i < parsed.length; i += 1) {
+              const sourceTitle = typeof parsed[i] === "object" && parsed[i] ? String(parsed[i].title || "") : "";
+              const targetTitle = dynamicPrograms[i] ? String(dynamicPrograms[i].title || "") : "";
+              if (sourceTitle && targetTitle && sourceTitle !== targetTitle) {
+                shouldRewriteStore = true;
+                break;
+              }
+            }
+          }
         }
       } catch {
         dynamicPrograms = [];
@@ -520,11 +626,17 @@
     const generatedCount = Math.max(1, Number(categoryConfig.generatedCount) || MARKET_PROGRAMS_PER_TYPE);
     if (dynamicPrograms.length > generatedCount) {
       dynamicPrograms = dynamicPrograms.slice(0, generatedCount);
+      shouldRewriteStore = true;
       localStorage.setItem(key, JSON.stringify(dynamicPrograms));
     }
 
     if (dynamicPrograms.length === 0) {
       dynamicPrograms = generateDynamicPrograms(sessionData, categoryId, getDynamicCategoryRevision(sessionData, categoryId));
+      shouldRewriteStore = true;
+      localStorage.setItem(key, JSON.stringify(dynamicPrograms));
+    }
+
+    if (shouldRewriteStore) {
       localStorage.setItem(key, JSON.stringify(dynamicPrograms));
     }
 
@@ -629,9 +741,75 @@
     return options[hashString(`${categoryId}:${title}:duration` ) % options.length];
   }
 
-  function getLegacyProgramDurationMinutes(categoryId, title) {
-    const options = LEGACY_CATEGORY_DURATION_OPTIONS[categoryId] || [60];
-    return options[hashString(`${categoryId}:${title}:duration`) % options.length];
+  function normalizeToken(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  function cleanupCategoryProgramTitle(categoryId, title) {
+    const safeCategory = String(categoryId || "").trim();
+    const safeTitle = String(title || "").trim();
+    if (!safeTitle) return "";
+    const suffixes = TITLE_SUFFIX_CLEANUP_BY_CATEGORY[safeCategory];
+    if (!Array.isArray(suffixes) || suffixes.length === 0) return safeTitle;
+    const splitIndex = safeTitle.lastIndexOf(" - ");
+    if (splitIndex < 0) return safeTitle;
+    const suffixRaw = safeTitle.slice(splitIndex + 3).trim();
+    if (!suffixRaw) return safeTitle;
+    const suffixNormalized = normalizeToken(suffixRaw);
+    const isRemovable = suffixes.some((item) => normalizeToken(item) === suffixNormalized);
+    if (!isRemovable) return safeTitle;
+    return safeTitle.slice(0, splitIndex).trim();
+  }
+
+  function inferSubtypeFromTitle(categoryId, title) {
+    const safeCategory = String(categoryId || "").trim();
+    const rawTitle = String(title || "").trim();
+    if (!safeCategory || !rawTitle) return "";
+    const normalizedTitle = normalizeToken(rawTitle);
+
+    if (safeCategory === "culture") {
+      const separatorIndex = rawTitle.lastIndexOf(" - ");
+      if (separatorIndex >= 0) {
+        const suffix = normalizeToken(rawTitle.slice(separatorIndex + 3));
+        if (suffix.includes("concert") || suffix.includes("recital")) return "Concert";
+        if (suffix.includes("ballet") || suffix.includes("danse")) return "Danse";
+        if (suffix.includes("theatre") || suffix.includes("piece")) return "Théâtre";
+        if (suffix.includes("opera")) return "Opéra";
+      }
+    }
+
+    const rules = CATEGORY_SUBTYPE_KEYWORD_RULES[safeCategory];
+    if (Array.isArray(rules)) {
+      for (let i = 0; i < rules.length; i += 1) {
+        const rule = rules[i];
+        const subtype = String(rule && rule.subtype || "").trim();
+        const keywords = Array.isArray(rule && rule.keywords) ? rule.keywords : [];
+        if (!subtype || !keywords.length) continue;
+        const match = keywords.some((keyword) => {
+          const token = normalizeToken(keyword);
+          return token && normalizedTitle.includes(token);
+        });
+        if (match) return subtype;
+      }
+    }
+    return "";
+  }
+
+  function getProgramSubtypeLabel(categoryId, title, explicitSubtype) {
+    const safeCategory = String(categoryId || "").trim();
+    if (SUBTYPELESS_CATEGORY_IDS.has(safeCategory)) return "";
+    const explicit = String(explicitSubtype || "").trim();
+    if (explicit) return explicit;
+    const inferred = inferSubtypeFromTitle(safeCategory, title);
+    if (inferred) return inferred;
+    const options = CATEGORY_SUBTYPE_OPTIONS[safeCategory];
+    if (!Array.isArray(options) || options.length === 0) return "";
+    const seed = hashString(`${safeCategory}:${String(title || "")}:subtype`);
+    return options[seed % options.length];
   }
 
   function normalizeStarRating(value, options) {
@@ -643,6 +821,28 @@
     const rounded = allowHalf ? (Math.round(numeric * 2) / 2) : Math.round(numeric);
     const min = allowHalf ? 0.5 : 1;
     return Math.max(min, Math.min(5, rounded));
+  }
+
+  function parseEpisodeTrackingKey(value) {
+    const match = /^S(\d+)E(\d+)$/i.exec(String(value || "").trim());
+    if (!match) return null;
+    return {
+      season: Math.max(1, Number(match[1]) || 1),
+      episode: Math.max(1, Number(match[2]) || 1)
+    };
+  }
+
+  function normalizeEpisodeReadyDatesMap(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const out = {};
+    Object.keys(raw).forEach((key) => {
+      const parsed = parseEpisodeTrackingKey(key);
+      const dateKey = String(raw[key] || "").trim();
+      if (!parsed || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+      const normalizedKey = `S${parsed.season}E${parsed.episode}`;
+      out[normalizedKey] = dateKey;
+    });
+    return out;
   }
 
   function getPriceFromStars(basePrice, stars, program, categoryId) {
@@ -687,12 +887,12 @@
           }
           : getProgramClassification(sessionData, category.id, program.title));
       if (category.id === "information") {
-        const presenterBonus = Number(ownedDetail && ownedDetail.presenterStarBonus);
-        const safeBonus = Number.isFinite(presenterBonus)
-          ? Math.max(0, Math.min(2, presenterBonus))
-          : 0;
+        const source = ownedDetail && typeof ownedDetail === "object" ? ownedDetail : program;
         return {
-          stars: normalizeStarRating(getDynamicStudioStars(sessionData) + safeBonus, { allowHalf: true, fallback: 0.5 }),
+          stars: normalizeStarRating(
+            resolveInfoProducedProgramStars(sessionData, source),
+            { allowHalf: true, fallback: 0.5 }
+          ),
           ageRating: fallback.ageRating
         };
       }
@@ -714,7 +914,8 @@
       duration,
       stars: classification.stars,
       ageRating: classification.ageRating,
-      productionMode
+      productionMode,
+      productionBudget: normalizeProductionBudget(ownedDetail && ownedDetail.productionBudget)
     };
   }
 
@@ -771,6 +972,42 @@
     return 0.5;
   }
 
+  function clampNumeric(value, min, max) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return min;
+    return Math.max(min, Math.min(max, numeric));
+  }
+
+  function roundToHalf(value) {
+    return Math.round((Number(value) || 0) * 2) / 2;
+  }
+
+  function computeProducedProgramStarsFromFactors(factors) {
+    const source = factors && typeof factors === "object" ? factors : {};
+    const baseStudio = clampNumeric(source.baseStudio, 0.5, 3);
+    const bonusBudget = clampNumeric(source.bonusBudget, -0.5, 0.5);
+    const bonusAntenne = clampNumeric(source.bonusAntenne, 0, 1);
+    const bonusRealisateur = clampNumeric(source.bonusRealisateur, 0, 1);
+    const bonusProducteur = clampNumeric(source.bonusProducteur, 0, 1);
+    const bonusCoherence = clampNumeric(source.bonusCoherence, 0, 0.5);
+    const brute = baseStudio + bonusBudget + bonusAntenne + bonusRealisateur + bonusProducteur + bonusCoherence;
+    const cap = Math.min(5, baseStudio + 2);
+    return Math.max(0.5, Math.min(cap, roundToHalf(brute)));
+  }
+
+  function resolveInfoProducedProgramStars(sessionData, programLike) {
+    const source = programLike && typeof programLike === "object" ? programLike : {};
+    const budgetBonus = getProductionBudgetConfig(source.productionBudget).starsBonus;
+    return computeProducedProgramStarsFromFactors({
+      baseStudio: getDynamicStudioStars(sessionData),
+      bonusBudget: budgetBonus,
+      bonusAntenne: source.presenterStarBonus,
+      bonusRealisateur: source.directorStarBonus,
+      bonusProducteur: source.producerStarBonus,
+      bonusCoherence: source.coherenceBonus
+    });
+  }
+
   function recoverSession() {
     if (!sessionUtils || typeof sessionUtils.requireSession !== "function") return null;
     return sessionUtils.requireSession({
@@ -793,6 +1030,20 @@
     return `${DATE_GRID_KEY_PREFIX}${getPlayerId(sessionData)}`;
   }
 
+  function studioProductionsKey(sessionData) {
+    return `${STUDIO_PRODUCTIONS_KEY_PREFIX}${getPlayerId(sessionData)}`;
+  }
+
+  function normalizeProductionBudget(value) {
+    const budget = String(value || "").trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(PRODUCTION_BUDGET_LEVELS, budget)) return budget;
+    return "medium";
+  }
+
+  function getProductionBudgetConfig(value) {
+    return PRODUCTION_BUDGET_LEVELS[normalizeProductionBudget(value)] || PRODUCTION_BUDGET_LEVELS.medium;
+  }
+
   function getProgramSnapshot(sessionData, category, program, options) {
     if (!category || !program || !sessionData) return null;
     const opts = options && typeof options === "object" ? options : {};
@@ -805,10 +1056,7 @@
         : fallbackClassification.stars,
       ageRating: forcedAge || fallbackClassification.ageRating
     };
-    const durationMode = typeof opts.durationMode === "string" ? opts.durationMode : "current";
-    const duration = durationMode === "legacy"
-      ? getLegacyProgramDurationMinutes(category.id, program.title)
-      : getProgramDurationMinutes(category.id, program.title);
+    const duration = getProgramDurationMinutes(category.id, program.title);
     return {
       title: program.title,
       categoryId: category.id,
@@ -817,7 +1065,10 @@
       episodesPerSeason: Number(program.episodesPerSeason) || null,
       duration,
       stars: classification.stars,
-      ageRating: classification.ageRating
+      ageRating: classification.ageRating,
+      productionBudget: "medium",
+      episodeReadyDates: {},
+      seasonStars: {}
     };
   }
 
@@ -865,91 +1116,9 @@
     return details;
   }
 
-  function inferOwnedDetailFromDateGrid(sessionData, title) {
-    const rawDateGrid = localStorage.getItem(dateGridKey(sessionData));
-    if (!rawDateGrid) return null;
-    try {
-      const parsed = JSON.parse(rawDateGrid);
-      if (!parsed || typeof parsed !== "object") return null;
-      let candidate = null;
-      Object.keys(parsed).forEach((dateKey) => {
-        const entries = normalizeGridDay(parsed[dateKey]);
-        entries.forEach((entry) => {
-          if (!entry || entry.title !== title || !entry.categoryId) return;
-          if (!candidate) {
-            const classification = getProgramClassification(sessionData, entry.categoryId, title);
-            candidate = {
-              title,
-              categoryId: entry.categoryId,
-              basePrice: 100000,
-              seasons: null,
-              episodesPerSeason: null,
-              duration: getLegacyProgramDurationMinutes(entry.categoryId, title),
-              stars: classification.stars,
-              ageRating: classification.ageRating
-            };
-          }
-          if (Number(entry.season) > 0) candidate.seasons = Math.max(1, Number(entry.season));
-          if (Number(entry.episode) > 0) {
-            candidate.episodesPerSeason = Math.max(candidate.episodesPerSeason || 1, Number(entry.episode));
-          }
-        });
-      });
-      return candidate;
-    } catch {
-      return null;
-    }
-  }
-
-  function inferOwnedDetailFromDynamicPools(sessionData, title) {
-    for (let i = 0; i < DYNAMIC_CATEGORY_IDS.length; i += 1) {
-      const categoryId = DYNAMIC_CATEGORY_IDS[i];
-      const key = dynamicCategoryKey(sessionData, categoryId);
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      try {
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) continue;
-        for (let j = 0; j < parsed.length; j += 1) {
-          const normalized = normalizeDynamicProgramEntry(parsed[j], categoryId);
-          if (!normalized || normalized.title !== title) continue;
-          return {
-            title,
-            categoryId,
-            basePrice: Number(normalized.price) || 100000,
-            seasons: Number(normalized.seasons) || null,
-            episodesPerSeason: Number(normalized.episodesPerSeason) || null,
-            duration: Number(normalized.duration) > 0
-              ? Number(normalized.duration)
-              : getLegacyProgramDurationMinutes(categoryId, title),
-            stars: Number(normalized.stars) > 0
-              ? Number(normalized.stars)
-              : getProgramClassification(sessionData, categoryId, title).stars,
-            ageRating: typeof normalized.ageRating === "string"
-              ? normalized.ageRating
-              : getProgramClassification(sessionData, categoryId, title).ageRating
-          };
-        }
-      } catch {
-        // Ignore corrupted dynamic store.
-      }
-    }
-    return null;
-  }
-
   function ensureOwnedProgramDetails(sessionData) {
     const detailsKey = ownedDetailsKey(sessionData);
-    const titlesKey = ownedKey(sessionData);
-    const hadDetailsBefore = localStorage.getItem(detailsKey) !== null;
-    const hadTitlesBefore = localStorage.getItem(titlesKey) !== null;
     let details = {};
-    const legacyOwnedTitles = new Set();
-
-    if (!hadDetailsBefore && !hadTitlesBefore) {
-      details = buildStarterOwnedDetails(sessionData);
-      Object.keys(details).forEach((title) => legacyOwnedTitles.add(title));
-    }
-
     const rawDetails = localStorage.getItem(detailsKey);
     if (rawDetails) {
       try {
@@ -967,17 +1136,50 @@
               basePrice: Number(raw.basePrice) > 0 ? Number(raw.basePrice) : 0,
               seasons: Number(raw.seasons) > 0 ? Number(raw.seasons) : null,
               episodesPerSeason: Number(raw.episodesPerSeason) > 0 ? Number(raw.episodesPerSeason) : null,
-              duration: Number(raw.duration) > 0 ? Number(raw.duration) : getLegacyProgramDurationMinutes(categoryId, cleanTitle),
+              duration: Number(raw.duration) > 0 ? Number(raw.duration) : getProgramDurationMinutes(categoryId, cleanTitle),
               stars: Number(raw.stars) > 0 ? Number(raw.stars) : null,
               ageRating: typeof raw.ageRating === "string" ? raw.ageRating : null,
               productionSubtype: typeof raw.productionSubtype === "string" ? raw.productionSubtype : null,
               productionMode: typeof raw.productionMode === "string" ? raw.productionMode : null,
+              productionBudget: normalizeProductionBudget(raw.productionBudget),
               producedAt: typeof raw.producedAt === "string" ? raw.producedAt : null,
               presenterId: typeof raw.presenterId === "string" ? raw.presenterId : null,
               presenterName: typeof raw.presenterName === "string" ? raw.presenterName : null,
+              presenterIds: Array.isArray(raw.presenterIds)
+                ? raw.presenterIds.map((value) => String(value || "").trim()).filter(Boolean)
+                : [],
+              presenterNames: Array.isArray(raw.presenterNames)
+                ? raw.presenterNames.map((value) => String(value || "").trim()).filter(Boolean)
+                : [],
+              presenterStarBonuses: Array.isArray(raw.presenterStarBonuses)
+                ? raw.presenterStarBonuses.map((value) => Math.max(0, Math.min(1, Number(value) || 0)))
+                : [],
               presenterStarBonus: Number.isFinite(Number(raw.presenterStarBonus))
-                ? Math.max(0, Math.min(2, Number(raw.presenterStarBonus)))
-                : 0
+                ? Math.max(0, Math.min(1, Number(raw.presenterStarBonus)))
+                : 0,
+              directorId: typeof raw.directorId === "string" ? raw.directorId : null,
+              directorName: typeof raw.directorName === "string" ? raw.directorName : null,
+              directorStarBonus: Number.isFinite(Number(raw.directorStarBonus))
+                ? Math.max(0, Math.min(1, Number(raw.directorStarBonus)))
+                : 0,
+              producerId: typeof raw.producerId === "string" ? raw.producerId : null,
+              producerName: typeof raw.producerName === "string" ? raw.producerName : null,
+              producerStarBonus: Number.isFinite(Number(raw.producerStarBonus))
+                ? Math.max(0, Math.min(1, Number(raw.producerStarBonus)))
+                : 0,
+              coherenceBonus: Number.isFinite(Number(raw.coherenceBonus))
+                ? Math.max(0, Math.min(0.5, Number(raw.coherenceBonus)))
+                : 0,
+              episodeReadyDates: normalizeEpisodeReadyDatesMap(raw.episodeReadyDates),
+              seasonStars: raw.seasonStars && typeof raw.seasonStars === "object" && !Array.isArray(raw.seasonStars)
+                ? Object.keys(raw.seasonStars).reduce((acc, key) => {
+                  const value = Number(raw.seasonStars[key]);
+                  if (!Number.isFinite(value) || value <= 0) return acc;
+                  acc[String(key)] = normalizeStarRating(value, { allowHalf: true, fallback: 0.5 });
+                  return acc;
+                }, {})
+                : {},
+              plannedEpisodes: Number(raw.plannedEpisodes) > 0 ? Number(raw.plannedEpisodes) : null
             };
           });
         }
@@ -985,74 +1187,17 @@
         details = {};
       }
     }
-
-    const rawOwnedTitles = localStorage.getItem(titlesKey);
-    if (rawOwnedTitles) {
-      try {
-        const parsed = JSON.parse(rawOwnedTitles);
-        if (Array.isArray(parsed)) parsed.forEach((title) => legacyOwnedTitles.add(title));
-      } catch {
-        // Ignore corrupted legacy store.
-      }
+    if (Object.keys(details).length === 0) {
+      details = buildStarterOwnedDetails(sessionData);
     }
-
-    if (Object.keys(details).length === 0 && legacyOwnedTitles.size === 0) {
-      const seeded = buildStarterOwnedDetails(sessionData);
-      Object.keys(seeded).forEach((title) => {
-        details[title] = seeded[title];
-        legacyOwnedTitles.add(title);
-      });
-    }
-
-    legacyOwnedTitles.forEach((title) => {
-      if (details[title]) return;
-      const found = findProgramByTitle(title);
-      if (found) {
-        const snap = getProgramSnapshot(sessionData, found.category, found.program, { durationMode: "legacy" });
-        if (snap) details[title] = snap;
-        return;
-      }
-      const inferred = inferOwnedDetailFromDateGrid(sessionData, title);
-      if (inferred) {
-        details[title] = inferred;
-        return;
-      }
-      const dynamicInferred = inferOwnedDetailFromDynamicPools(sessionData, title);
-      if (dynamicInferred) {
-        details[title] = dynamicInferred;
-        return;
-      }
-      // Legacy-safe fallback: old dynamic catalog was film-only in earlier versions.
-      details[title] = {
-        title,
-        categoryId: "films",
-        basePrice: 120000,
-        seasons: null,
-        episodesPerSeason: null,
-        duration: getLegacyProgramDurationMinutes("films", title),
-        stars: getProgramClassification(sessionData, "films", title).stars,
-        ageRating: getProgramClassification(sessionData, "films", title).ageRating
-      };
-    });
-
     localStorage.setItem(detailsKey, JSON.stringify(details));
-    localStorage.setItem(titlesKey, JSON.stringify(Array.from(new Set([...legacyOwnedTitles, ...Object.keys(details)]))));
+    localStorage.setItem(ownedKey(sessionData), JSON.stringify(Object.keys(details)));
     return details;
   }
 
   function ensureOwnedTitles(sessionData) {
     const details = ensureOwnedProgramDetails(sessionData);
-    const titles = new Set(Object.keys(details));
-    const rawOwnedTitles = localStorage.getItem(ownedKey(sessionData));
-    if (rawOwnedTitles) {
-      try {
-        const parsed = JSON.parse(rawOwnedTitles);
-        if (Array.isArray(parsed)) parsed.forEach((title) => titles.add(title));
-      } catch {
-        // Ignore corrupted legacy store.
-      }
-    }
-    return titles;
+    return new Set(Object.keys(details));
   }
 
   function saveOwnedTitles(sessionData, ownedSet) {
@@ -1062,6 +1207,105 @@
   function saveOwnedProgramDetails(sessionData, details) {
     localStorage.setItem(ownedDetailsKey(sessionData), JSON.stringify(details));
     localStorage.setItem(ownedKey(sessionData), JSON.stringify(Object.keys(details)));
+  }
+
+  function normalizeStudioProductionEpisode(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const episode = Math.max(1, Number(raw.episode) || 1);
+    const shootDateKey = String(raw.shootDateKey || "").trim();
+    const shootStartMinute = Number(raw.shootStartMinute);
+    const shootDurationMinutes = Math.max(30, Number(raw.shootDurationMinutes) || 60);
+    const readyDateKey = String(raw.readyDateKey || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(shootDateKey)) return null;
+    if (!Number.isFinite(shootStartMinute) || shootStartMinute < 0 || shootStartMinute >= (24 * 60)) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(readyDateKey)) return null;
+    return {
+      episode,
+      shootDateKey,
+      shootStartMinute: Math.floor(shootStartMinute),
+      shootDurationMinutes: Math.floor(shootDurationMinutes),
+      readyDateKey
+    };
+  }
+
+  function normalizeStudioProductionRecord(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const id = String(raw.id || "").trim();
+    const title = String(raw.title || "").trim();
+    const categoryId = String(raw.categoryId || "").trim();
+    const createdAt = String(raw.createdAt || "").trim();
+    const subtype = String(raw.subtype || "").trim();
+    const budget = normalizeProductionBudget(raw.budget);
+    const duration = Math.max(5, Number(raw.duration) || 60);
+    const episodes = Array.isArray(raw.episodes)
+      ? raw.episodes.map(normalizeStudioProductionEpisode).filter(Boolean)
+      : [];
+    if (!id || !title || !categoryId || !createdAt || episodes.length === 0) return null;
+    return {
+      id,
+      title,
+      categoryId,
+      subtype,
+      budget,
+      duration,
+      createdAt,
+      totalEpisodes: Math.max(1, Number(raw.totalEpisodes) || episodes.length),
+      starsAtLaunch: normalizeStarRating(raw.starsAtLaunch, { allowHalf: true, fallback: 0.5 }),
+      studioId: String(raw.studioId || "studio_1").trim() || "studio_1",
+      studioName: String(raw.studioName || "Studio TV 1").trim() || "Studio TV 1",
+      episodes
+    };
+  }
+
+  function ensureStudioProductions(sessionData) {
+    const key = studioProductionsKey(sessionData);
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        localStorage.setItem(key, JSON.stringify([]));
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        localStorage.setItem(key, JSON.stringify([]));
+        return [];
+      }
+      const normalized = parsed.map(normalizeStudioProductionRecord).filter(Boolean);
+      localStorage.setItem(key, JSON.stringify(normalized));
+      return normalized;
+    } catch {
+      localStorage.setItem(key, JSON.stringify([]));
+      return [];
+    }
+  }
+
+  function saveStudioProductions(sessionData, list) {
+    const safe = Array.isArray(list) ? list.map(normalizeStudioProductionRecord).filter(Boolean) : [];
+    localStorage.setItem(studioProductionsKey(sessionData), JSON.stringify(safe));
+    return safe;
+  }
+
+  function registerStudioProduction(sessionData, payload) {
+    const normalized = normalizeStudioProductionRecord(payload);
+    if (!normalized) return { ok: false, message: "Production invalide." };
+    const list = ensureStudioProductions(sessionData);
+    const next = [...list.filter((item) => item.id !== normalized.id), normalized];
+    saveStudioProductions(sessionData, next);
+    return { ok: true };
+  }
+
+  function getStudioProductions(sessionData) {
+    const list = ensureStudioProductions(sessionData);
+    const today = todayDateKey();
+    return list.map((record) => {
+      const safeEpisodes = Array.isArray(record.episodes) ? record.episodes.slice() : [];
+      const readyCount = safeEpisodes.filter((episode) => episode.readyDateKey <= today).length;
+      return {
+        ...record,
+        readyEpisodes: readyCount,
+        progress: Math.round((readyCount / Math.max(1, record.totalEpisodes)) * 100)
+      };
+    });
   }
 
   function findProgramByTitle(title, sessionData) {
@@ -1087,16 +1331,37 @@
             price: Number(stored.basePrice) || 0,
             seasons: Number(stored.seasons) || null,
             episodesPerSeason: Number(stored.episodesPerSeason) || null,
-            duration: Number(stored.duration) || getLegacyProgramDurationMinutes(stored.categoryId, stored.title),
+            duration: Number(stored.duration) || getProgramDurationMinutes(stored.categoryId, stored.title),
             stars: Number(stored.stars) || null,
             ageRating: stored.ageRating || null,
             productionMode: stored.productionMode || null,
+            productionBudget: normalizeProductionBudget(stored.productionBudget),
+            productionSubtype: stored.productionSubtype || null,
             producedAt: stored.producedAt || null,
             presenterId: stored.presenterId || null,
             presenterName: stored.presenterName || null,
+            presenterIds: Array.isArray(stored.presenterIds) ? stored.presenterIds.slice() : [],
+            presenterNames: Array.isArray(stored.presenterNames) ? stored.presenterNames.slice() : [],
+            presenterStarBonuses: Array.isArray(stored.presenterStarBonuses) ? stored.presenterStarBonuses.slice() : [],
             presenterStarBonus: Number.isFinite(Number(stored.presenterStarBonus))
-              ? Math.max(0, Math.min(2, Number(stored.presenterStarBonus)))
-              : 0
+              ? Math.max(0, Math.min(1, Number(stored.presenterStarBonus)))
+              : 0,
+            directorId: stored.directorId || null,
+            directorName: stored.directorName || null,
+            directorStarBonus: Number.isFinite(Number(stored.directorStarBonus))
+              ? Math.max(0, Math.min(1, Number(stored.directorStarBonus)))
+              : 0,
+            producerId: stored.producerId || null,
+            producerName: stored.producerName || null,
+            producerStarBonus: Number.isFinite(Number(stored.producerStarBonus))
+              ? Math.max(0, Math.min(1, Number(stored.producerStarBonus)))
+              : 0,
+            coherenceBonus: Number.isFinite(Number(stored.coherenceBonus))
+              ? Math.max(0, Math.min(0.5, Number(stored.coherenceBonus)))
+              : 0,
+            episodeReadyDates: normalizeEpisodeReadyDatesMap(stored.episodeReadyDates),
+            seasonStars: stored.seasonStars && typeof stored.seasonStars === "object" ? { ...stored.seasonStars } : {},
+            plannedEpisodes: Number(stored.plannedEpisodes) > 0 ? Number(stored.plannedEpisodes) : null
           }
         };
       }
@@ -1323,13 +1588,20 @@
   function ownedCatalog(sessionData) {
     ensureDynamicPrograms(sessionData);
     const ownedTitles = ensureOwnedTitles(sessionData);
+    const ownedDetails = ensureOwnedProgramDetails(sessionData);
     const seenMap = buildSeenMapFromPastDiffusions(sessionData);
     const grouped = new Map();
+    const todayKey = todayDateKey();
     Array.from(ownedTitles).forEach((title) => {
+      if (!isProgramAvailableForBroadcast(sessionData, title, todayKey)) return;
       const found = findProgramByTitle(title, sessionData);
       if (!found) return;
       const category = found.category;
       const program = found.program;
+      const ownedDetail = ownedDetails[title];
+      const explicitSubtype = ownedDetail && typeof ownedDetail.productionSubtype === "string"
+        ? ownedDetail.productionSubtype
+        : (typeof program.productionSubtype === "string" ? program.productionSubtype : "");
       const enriched = enrichProgramForSession(sessionData, category, program);
       const diffusion = getProgramMarketStatus(program, seenMap, category.id, { useExternalStatus: false });
       if (!grouped.has(category.id)) {
@@ -1344,6 +1616,7 @@
         title: enriched.title,
         price: enriched.price,
         duration: enriched.duration,
+        subtype: getProgramSubtypeLabel(category.id, enriched.title, explicitSubtype),
         stars: enriched.stars,
         ageRating: enriched.ageRating,
         seasons: Number(program.seasons) || null,
@@ -1362,7 +1635,9 @@
     ensureDynamicPrograms(sessionData);
     const ownedTitles = ensureOwnedTitles(sessionData);
     const grouped = new Map();
+    const todayKey = todayDateKey();
     Array.from(ownedTitles).forEach((title) => {
+      if (!isProgramAvailableForBroadcast(sessionData, title, todayKey)) return;
       const found = findProgramByTitle(title, sessionData);
       if (!found) return;
       const category = found.category;
@@ -1399,6 +1674,11 @@
         })();
         return sourcePrograms.map((program) => ({
         ...enrichProgramForSession(sessionData, category, program),
+        subtype: getProgramSubtypeLabel(
+          category.id,
+          String(program.title || ""),
+          typeof program.productionSubtype === "string" ? program.productionSubtype : ""
+        ),
         owned: owned.has(program.title),
         seasons: Number(program.seasons) || null,
         episodesPerSeason: Number(program.episodesPerSeason) || null,
@@ -1436,6 +1716,68 @@
     const productionSubtype = ownedDetail && typeof ownedDetail.productionSubtype === "string"
       ? ownedDetail.productionSubtype
       : (typeof found.program.productionSubtype === "string" ? found.program.productionSubtype : null);
+    const productionBudget = normalizeProductionBudget(
+      ownedDetail && ownedDetail.productionBudget
+        ? ownedDetail.productionBudget
+        : found.program.productionBudget
+    );
+    const episodeReadyDates = normalizeEpisodeReadyDatesMap(
+      ownedDetail && ownedDetail.episodeReadyDates
+        ? ownedDetail.episodeReadyDates
+        : found.program.episodeReadyDates
+    );
+    const seasonStars = ownedDetail && ownedDetail.seasonStars && typeof ownedDetail.seasonStars === "object"
+      ? { ...ownedDetail.seasonStars }
+      : (found.program.seasonStars && typeof found.program.seasonStars === "object" ? { ...found.program.seasonStars } : {});
+    const presenterId = ownedDetail && typeof ownedDetail.presenterId === "string"
+      ? ownedDetail.presenterId
+      : (typeof found.program.presenterId === "string" ? found.program.presenterId : null);
+    const presenterIds = Array.isArray(ownedDetail && ownedDetail.presenterIds)
+      ? ownedDetail.presenterIds.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+    if (!presenterIds.length && presenterId) presenterIds.push(String(presenterId));
+    const presenterName = ownedDetail && typeof ownedDetail.presenterName === "string"
+      ? ownedDetail.presenterName
+      : (typeof found.program.presenterName === "string" ? found.program.presenterName : null);
+    const presenterNames = Array.isArray(ownedDetail && ownedDetail.presenterNames)
+      ? ownedDetail.presenterNames.map((value) => String(value || "").trim()).filter(Boolean)
+      : [];
+    if (!presenterNames.length && presenterName) presenterNames.push(String(presenterName));
+    const presenterStarBonus = Number.isFinite(Number(ownedDetail && ownedDetail.presenterStarBonus))
+      ? Math.max(0, Math.min(1, Number(ownedDetail.presenterStarBonus)))
+      : (Number.isFinite(Number(found.program.presenterStarBonus))
+        ? Math.max(0, Math.min(1, Number(found.program.presenterStarBonus)))
+        : 0);
+    const presenterStarBonuses = Array.isArray(ownedDetail && ownedDetail.presenterStarBonuses)
+      ? ownedDetail.presenterStarBonuses.map((value) => Math.max(0, Math.min(1, Number(value) || 0)))
+      : [];
+    const directorId = ownedDetail && typeof ownedDetail.directorId === "string"
+      ? ownedDetail.directorId
+      : (typeof found.program.directorId === "string" ? found.program.directorId : null);
+    const directorName = ownedDetail && typeof ownedDetail.directorName === "string"
+      ? ownedDetail.directorName
+      : (typeof found.program.directorName === "string" ? found.program.directorName : null);
+    const directorStarBonus = Number.isFinite(Number(ownedDetail && ownedDetail.directorStarBonus))
+      ? Math.max(0, Math.min(1, Number(ownedDetail.directorStarBonus)))
+      : (Number.isFinite(Number(found.program.directorStarBonus))
+        ? Math.max(0, Math.min(1, Number(found.program.directorStarBonus)))
+        : 0);
+    const producerId = ownedDetail && typeof ownedDetail.producerId === "string"
+      ? ownedDetail.producerId
+      : (typeof found.program.producerId === "string" ? found.program.producerId : null);
+    const producerName = ownedDetail && typeof ownedDetail.producerName === "string"
+      ? ownedDetail.producerName
+      : (typeof found.program.producerName === "string" ? found.program.producerName : null);
+    const producerStarBonus = Number.isFinite(Number(ownedDetail && ownedDetail.producerStarBonus))
+      ? Math.max(0, Math.min(1, Number(ownedDetail.producerStarBonus)))
+      : (Number.isFinite(Number(found.program.producerStarBonus))
+        ? Math.max(0, Math.min(1, Number(found.program.producerStarBonus)))
+        : 0);
+    const coherenceBonus = Number.isFinite(Number(ownedDetail && ownedDetail.coherenceBonus))
+      ? Math.max(0, Math.min(0.5, Number(ownedDetail.coherenceBonus)))
+      : (Number.isFinite(Number(found.program.coherenceBonus))
+        ? Math.max(0, Math.min(0.5, Number(found.program.coherenceBonus)))
+        : 0);
     return {
       title: enriched.title,
       categoryId: found.category.id,
@@ -1444,13 +1786,68 @@
       stars: enriched.stars,
       ageRating: enriched.ageRating,
       productionMode: enriched.productionMode || null,
+      productionBudget,
       productionSubtype,
+      subtype: getProgramSubtypeLabel(found.category.id, enriched.title, productionSubtype),
       seasons,
       episodesPerSeason,
       totalEpisodes: seasons && episodesPerSeason ? (seasons * episodesPerSeason) : null,
       diffusionCount: Number(diffusion && diffusion.diffusionCount) || 0,
-      diffusionStatus: diffusion && diffusion.status ? diffusion.status : "inedit"
+      diffusionStatus: diffusion && diffusion.status ? diffusion.status : "inedit",
+      presenterId: presenterId || null,
+      presenterName: presenterName || null,
+      presenterIds,
+      presenterNames,
+      presenterStarBonus,
+      presenterStarBonuses,
+      directorId: directorId || null,
+      directorName: directorName || null,
+      directorStarBonus,
+      producerId: producerId || null,
+      producerName: producerName || null,
+      producerStarBonus,
+      coherenceBonus,
+      episodeReadyDates,
+      seasonStars
     };
+  }
+
+  function getProgramEpisodeAvailabilityForDate(sessionData, title, dateKey) {
+    const meta = getProgramMeta(title);
+    if (!meta || Number(meta.seasons) <= 0 || Number(meta.episodesPerSeason) <= 0) return null;
+    const safeDateKey = /^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || "")) ? String(dateKey) : todayDateKey();
+    const readyDates = normalizeEpisodeReadyDatesMap(meta.episodeReadyDates);
+    const hasReadyMap = Object.keys(readyDates).length > 0;
+    const availableEpisodes = [];
+    const unavailableEpisodes = [];
+    for (let season = 1; season <= Number(meta.seasons); season += 1) {
+      for (let episode = 1; episode <= Number(meta.episodesPerSeason); episode += 1) {
+        const trackingKey = `S${season}E${episode}`;
+        const readyDateKey = readyDates[trackingKey] || "";
+        const available = !hasReadyMap || (readyDateKey && readyDateKey <= safeDateKey);
+        const row = { season, episode, key: trackingKey, readyDateKey };
+        if (available) availableEpisodes.push(row);
+        else unavailableEpisodes.push(row);
+      }
+    }
+    const availableBySeason = {};
+    availableEpisodes.forEach((item) => {
+      availableBySeason[item.season] = (availableBySeason[item.season] || 0) + 1;
+    });
+    return {
+      seasons: Number(meta.seasons),
+      episodesPerSeason: Number(meta.episodesPerSeason),
+      availableBySeason,
+      availableEpisodes,
+      unavailableEpisodes,
+      hasReadyMap
+    };
+  }
+
+  function isProgramAvailableForBroadcast(sessionData, title, dateKey) {
+    const availability = getProgramEpisodeAvailabilityForDate(sessionData, title, dateKey);
+    if (!availability || !availability.hasReadyMap) return true;
+    return Array.isArray(availability.availableEpisodes) && availability.availableEpisodes.length > 0;
   }
 
   function buyProgram(sessionData, title) {
@@ -1655,9 +2052,13 @@
     const categoryId = String(data.categoryId || "").trim();
     const subtype = String(data.subtype || "").trim();
     const duration = Number(data.duration);
+    const episodeCount = Math.max(1, Math.floor(Number(data.episodeCount) || 1));
     const productionModeRaw = String(data.productionMode || "").trim().toLowerCase();
+    const productionBudget = normalizeProductionBudget(data.productionBudget);
     const requestedAgeRating = String(data.ageRating || "TP");
     const starsOverride = Number(data.starsOverride);
+    const episodeReadyDates = normalizeEpisodeReadyDatesMap(data.episodeReadyDates);
+    const requestedSeasonStars = data.seasonStars && typeof data.seasonStars === "object" ? data.seasonStars : {};
     const presenterId = String(data.presenterId || "").trim();
     const presenterName = String(data.presenterName || "").trim();
     const presenterStarBonus = Number(data.presenterStarBonus);
@@ -1668,8 +2069,15 @@
       ? data.presenterNames.map((value) => String(value || "").trim()).filter(Boolean)
       : [];
     const presenterStarBonuses = Array.isArray(data.presenterStarBonuses)
-      ? data.presenterStarBonuses.map((value) => Math.max(0, Math.min(2, Number(value) || 0)))
+      ? data.presenterStarBonuses.map((value) => Math.max(0, Math.min(1, Number(value) || 0)))
       : [];
+    const directorId = String(data.directorId || "").trim();
+    const directorName = String(data.directorName || "").trim();
+    const directorStarBonus = Number(data.directorStarBonus);
+    const producerId = String(data.producerId || "").trim();
+    const producerName = String(data.producerName || "").trim();
+    const producerStarBonus = Number(data.producerStarBonus);
+    const coherenceBonus = Number(data.coherenceBonus);
 
     if (!rawTitle) return { ok: false, message: "Nom de programme requis." };
     if (rawTitle.length < 3) return { ok: false, message: "Le nom doit contenir au moins 3 caractères." };
@@ -1706,38 +2114,74 @@
     const ownedDetails = ensureOwnedProgramDetails(sessionData);
     const owned = ensureOwnedTitles(sessionData);
     const safeSubtype = subtype || (categoryId === "information" ? "JT" : "Société");
-    const productionMode = productionModeRaw === "recorded" ? "recorded" : "direct";
     const allowedInfoRatings = new Set(["TP", "-10", "-12", "-16"]);
     const resolvedAgeRating = categoryId === "information"
       ? (safeSubtype === "Faits divers" && allowedInfoRatings.has(requestedAgeRating) ? requestedAgeRating : "TP")
       : classification.ageRating;
+    const productionMode = categoryId === "magazines"
+      ? "recorded"
+      : (productionModeRaw === "recorded" ? "recorded" : "direct");
+    const resolvedSeasonStars = Object.keys(requestedSeasonStars).reduce((acc, key) => {
+      const value = Number(requestedSeasonStars[key]);
+      if (!Number.isFinite(value) || value <= 0) return acc;
+      acc[String(key)] = normalizeStarRating(value, { allowHalf: true, fallback: resolvedStars });
+      return acc;
+    }, {});
+    if (categoryId === "magazines" && !resolvedSeasonStars["1"]) {
+      resolvedSeasonStars["1"] = resolvedStars;
+    }
     const detail = {
       title: rawTitle,
       categoryId,
       basePrice: categoryId === "information" ? 20000 : 90000,
-      seasons: null,
-      episodesPerSeason: null,
+      seasons: categoryId === "magazines" ? 1 : null,
+      episodesPerSeason: categoryId === "magazines" ? episodeCount : null,
       duration,
       stars: resolvedStars,
       ageRating: resolvedAgeRating,
       productionSubtype: safeSubtype,
       productionMode,
+      productionBudget,
       producedAt: new Date().toISOString(),
       presenterId: presenterId || null,
       presenterName: presenterName || null,
       presenterStarBonus: Number.isFinite(presenterStarBonus)
-        ? Math.max(0, Math.min(2, presenterStarBonus))
+        ? Math.max(0, Math.min(1, presenterStarBonus))
         : 0,
       presenterIds,
       presenterNames,
-      presenterStarBonuses
+      presenterStarBonuses,
+      directorId: directorId || null,
+      directorName: directorName || null,
+      directorStarBonus: Number.isFinite(directorStarBonus)
+        ? Math.max(0, Math.min(1, directorStarBonus))
+        : 0,
+      producerId: producerId || null,
+      producerName: producerName || null,
+      producerStarBonus: Number.isFinite(producerStarBonus)
+        ? Math.max(0, Math.min(1, producerStarBonus))
+        : 0,
+      coherenceBonus: Number.isFinite(coherenceBonus)
+        ? Math.max(0, Math.min(0.5, coherenceBonus))
+        : 0,
+      episodeReadyDates: categoryId === "magazines" ? episodeReadyDates : {},
+      seasonStars: categoryId === "magazines" ? resolvedSeasonStars : {},
+      plannedEpisodes: categoryId === "magazines" ? episodeCount : null
     };
 
     ownedDetails[rawTitle] = detail;
     owned.add(rawTitle);
     saveOwnedProgramDetails(sessionData, ownedDetails);
     saveOwnedTitles(sessionData, owned);
-    return { ok: true, message: "Programme produit.", title: rawTitle, categoryId, subtype: safeSubtype, duration };
+    return {
+      ok: true,
+      message: "Programme produit.",
+      title: rawTitle,
+      categoryId,
+      subtype: safeSubtype,
+      duration,
+      episodeCount: detail.episodesPerSeason || null
+    };
   }
 
   function setProducedProgramPresenter(sessionData, title, presenterData) {
@@ -1746,14 +2190,15 @@
     const details = ensureOwnedProgramDetails(sessionData);
     const entry = details[cleanTitle];
     if (!entry) return { ok: false, message: "Programme introuvable." };
-    if (String(entry.categoryId || "") !== "information") {
-      return { ok: false, message: "Affectation réservée aux programmes d'information." };
+    const categoryId = String(entry.categoryId || "");
+    if (categoryId !== "information" && categoryId !== "magazines") {
+      return { ok: false, message: "Affectation réservée aux productions studio TV." };
     }
     const payload = presenterData && typeof presenterData === "object" ? presenterData : {};
     entry.presenterId = String(payload.presenterId || "").trim() || null;
     entry.presenterName = String(payload.presenterName || "").trim() || null;
     entry.presenterStarBonus = Number.isFinite(Number(payload.presenterStarBonus))
-      ? Math.max(0, Math.min(2, Number(payload.presenterStarBonus)))
+      ? Math.max(0, Math.min(1, Number(payload.presenterStarBonus)))
       : 0;
     entry.presenterIds = Array.isArray(payload.presenterIds)
       ? payload.presenterIds.map((value) => String(value || "").trim()).filter(Boolean)
@@ -1762,8 +2207,35 @@
       ? payload.presenterNames.map((value) => String(value || "").trim()).filter(Boolean)
       : [];
     entry.presenterStarBonuses = Array.isArray(payload.presenterStarBonuses)
-      ? payload.presenterStarBonuses.map((value) => Math.max(0, Math.min(2, Number(value) || 0)))
+      ? payload.presenterStarBonuses.map((value) => Math.max(0, Math.min(1, Number(value) || 0)))
       : [];
+    if (Object.prototype.hasOwnProperty.call(payload, "directorId")) {
+      entry.directorId = String(payload.directorId || "").trim() || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "directorName")) {
+      entry.directorName = String(payload.directorName || "").trim() || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "directorStarBonus")) {
+      entry.directorStarBonus = Number.isFinite(Number(payload.directorStarBonus))
+        ? Math.max(0, Math.min(1, Number(payload.directorStarBonus)))
+        : 0;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "producerId")) {
+      entry.producerId = String(payload.producerId || "").trim() || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "producerName")) {
+      entry.producerName = String(payload.producerName || "").trim() || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "producerStarBonus")) {
+      entry.producerStarBonus = Number.isFinite(Number(payload.producerStarBonus))
+        ? Math.max(0, Math.min(1, Number(payload.producerStarBonus)))
+        : 0;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "coherenceBonus")) {
+      entry.coherenceBonus = Number.isFinite(Number(payload.coherenceBonus))
+        ? Math.max(0, Math.min(0.5, Number(payload.coherenceBonus)))
+        : 0;
+    }
     saveOwnedProgramDetails(sessionData, details);
     return { ok: true };
   }
@@ -1778,6 +2250,7 @@
 
   window.ProgramCatalog = {
     CATEGORY_DURATION_OPTIONS,
+    PRODUCTION_BUDGET_LEVELS,
     getAvailableCategoriesForCurrentSession: function getAvailableCategories() {
       const activeSession = getSession();
       if (!activeSession) return [];
@@ -1854,6 +2327,21 @@
       const activeSession = getSession();
       if (!activeSession) return { ok: false, message: "Session introuvable." };
       return createProducedProgram(activeSession, payload);
+    },
+    registerStudioProductionForCurrentSession: function registerStudioProductionForCurrentSession(payload) {
+      const activeSession = getSession();
+      if (!activeSession) return { ok: false, message: "Session introuvable." };
+      return registerStudioProduction(activeSession, payload);
+    },
+    getStudioProductionsForCurrentSession: function getStudioProductionsForCurrentSession() {
+      const activeSession = getSession();
+      if (!activeSession) return [];
+      return getStudioProductions(activeSession);
+    },
+    getProgramEpisodeAvailabilityForDateForCurrentSession: function getProgramEpisodeAvailabilityForDateForCurrentSession(title, dateKey) {
+      const activeSession = getSession();
+      if (!activeSession) return null;
+      return getProgramEpisodeAvailabilityForDate(activeSession, title, dateKey);
     },
     setProducedProgramPresenterForCurrentSession: function setProducedProgramPresenterForCurrentSession(title, presenterData) {
       const activeSession = getSession();

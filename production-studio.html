@@ -25,6 +25,10 @@
                 <label for="productionStudioSelect">Studio TV</label>
                 <select id="productionStudioSelect"></select>
 
+                <label for="productionTypeSelect">Type</label>
+                <div id="productionTypeButtons" class="studio-chip-row"></div>
+                <select id="productionTypeSelect" class="hidden"></select>
+
                 <label for="productionModeSelect">Mode de production</label>
                 <div id="productionModeButtons" class="studio-chip-row">
                   <button type="button" class="filter-chip" data-value="direct">Direct</button>
@@ -34,10 +38,6 @@
                   <option value="direct">Direct</option>
                   <option value="recorded">Enregistré</option>
                 </select>
-
-                <label for="productionTypeSelect">Type</label>
-                <div id="productionTypeButtons" class="studio-chip-row"></div>
-                <select id="productionTypeSelect" class="hidden"></select>
 
                 <label for="productionSubtypeSelect">Sous-type</label>
                 <div id="productionSubtypeButtons" class="studio-chip-row"></div>
@@ -55,6 +55,18 @@
                   <option value="-10">-10</option>
                   <option value="-12">-12</option>
                   <option value="-16">-16</option>
+                </select>
+
+                <label id="productionBudgetLabel" for="productionBudgetSelect">Budget</label>
+                <div id="productionBudgetButtons" class="studio-chip-row">
+                  <button type="button" class="filter-chip" data-value="low">Faible</button>
+                  <button type="button" class="filter-chip" data-value="medium">Moyen</button>
+                  <button type="button" class="filter-chip" data-value="high">Élevé</button>
+                </div>
+                <select id="productionBudgetSelect" class="hidden">
+                  <option value="low">Faible</option>
+                  <option value="medium">Moyen</option>
+                  <option value="high">Élevé</option>
                 </select>
 
                 <label for="productionDurationSelect">Durée</label>
@@ -80,7 +92,7 @@
                 <label id="productionRecurringDaysLabel" class="hidden">Jours de diffusion (5 max)</label>
                 <div id="productionRecurringDaysWrap" class="studio-chip-row hidden"></div>
 
-                <label id="productionRunsLabel" class="hidden" for="productionDailyRunsSelect">Nombre de diffusion par jour</label>
+                <label id="productionRunsLabel" class="hidden" for="productionDailyRunsSelect">Nombre de diffusions par jour</label>
                 <div id="productionDailyRunsButtons" class="studio-chip-row hidden">
                   <button type="button" class="filter-chip" data-value="1">1 diffusion</button>
                   <button type="button" class="filter-chip" data-value="2">2 diffusions</button>
@@ -89,6 +101,16 @@
                   <option value="1">1 passage</option>
                   <option value="2">2 passages</option>
                 </select>
+
+                <label id="productionEpisodeCountLabel" class="hidden" for="productionEpisodeCountSelect">Nombre d'épisodes</label>
+                <div id="productionEpisodeCountButtons" class="studio-chip-row hidden"></div>
+                <select id="productionEpisodeCountSelect" class="hidden"></select>
+
+                <label id="productionShootDaysLabel" class="hidden">Jour de tournage</label>
+                <div id="productionShootDaysWrap" class="studio-chip-row hidden"></div>
+
+                <label id="productionShootTimesLabel" class="hidden">Heure de tournage (par jour)</label>
+                <div id="productionShootTimesWrap" class="studio-production-shoot-times hidden"></div>
 
                 <label for="productionStartInput" id="productionStartLabel">Heure de diffusion</label>
                 <input id="productionStartInput" type="time" step="300" required />
@@ -112,6 +134,12 @@
 
                 <label id="productionPresentersListLabel">Journalistes sélectionnés</label>
                 <div id="productionPresentersSelectWrap" class="studio-production-presenters-wrap"></div>
+
+                <label for="productionDirectorSelect">Réalisateur</label>
+                <select id="productionDirectorSelect" required></select>
+
+                <label for="productionProducerSelect">Producteur</label>
+                <select id="productionProducerSelect" required></select>
               </div>
             </div>
 

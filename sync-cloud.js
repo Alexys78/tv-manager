@@ -19,8 +19,6 @@
   ]);
 
   const managedPrefixes = [
-    appKeys.WEEK_GRID_KEY_PREFIX,
-    appKeys.LEGACY_GRID_KEY_PREFIX,
     appKeys.DATE_GRID_KEY_PREFIX,
     appKeys.GRID_PUBLICATION_KEY_PREFIX,
     appKeys.RESULTS_KEY_PREFIX,
@@ -35,6 +33,7 @@
     appKeys.OWNED_DETAILS_KEY_PREFIX,
     appKeys.STUDIO_KEY_PREFIX,
     appKeys.STUDIO_SCHEDULE_KEY_PREFIX,
+    appKeys.STUDIO_PRODUCTIONS_KEY_PREFIX,
     appKeys.PRESENTERS_KEY_PREFIX,
     appKeys.DYNAMIC_FILMS_KEY_PREFIX,
     appKeys.DYNAMIC_FILMS_REVISION_KEY_PREFIX,
@@ -68,22 +67,11 @@
     return null;
   }
 
-  function readSessionFromStorageFallback() {
-    try {
-      const raw = localStorage.getItem(appKeys.SESSION_KEY || "tv_manager_session");
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed && parsed.email ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-
   function getActiveSession() {
     const recovered = sessionUtils.recoverSessionFromLocation({ persist: true });
-    if (recovered && recovered.email) return recovered;
+    if (recovered && recovered.email && sessionUtils.hasCloudAccess(recovered)) return recovered;
     if (runtime && runtime.session && runtime.session.email) return runtime.session;
-    return readSessionFromStorageFallback();
+    return null;
   }
 
   function readConfig() {
@@ -93,7 +81,7 @@
         return {
           url: String(cfg.url).trim().replace(/\/+$/, ""),
           anonKey: String(cfg.anonKey).trim(),
-          syncToken: String(cfg.syncToken || "").trim() || "default"
+          syncToken: String(cfg.syncToken || "").trim()
         };
       }
     }
@@ -105,7 +93,7 @@
       return {
         url: String(parsed.url).trim().replace(/\/+$/, ""),
         anonKey: String(parsed.anonKey).trim(),
-        syncToken: String(parsed.syncToken || "").trim() || "default"
+        syncToken: String(parsed.syncToken || "").trim()
       };
     } catch {
       return null;
@@ -182,7 +170,10 @@
     window.dispatchEvent(new CustomEvent("tvmanager:cloud-sync", { detail }));
   }
 
-  function makeHeaders(config) {
+  function makeHeaders(config, session) {
+    if (!session || !session.email) {
+      throw new Error("Session cloud invalide: reconnecte-toi.");
+    }
     return {
       apikey: config.anonKey,
       Authorization: `Bearer ${config.anonKey}`,
@@ -211,13 +202,15 @@
     }
   }
 
-  function effectiveSyncToken(config) {
-    return String((config && config.syncToken) || "").trim() || "default";
+  function effectiveSyncToken(config, playerId) {
+    const explicitToken = String((config && config.syncToken) || "").trim();
+    return explicitToken || String(playerId || "").trim() || "default";
   }
 
-  async function fetchLatestRowForNamespace(config, playerId, namespace) {
-    const url = `${config.url}/rest/v1/${encodeURIComponent(STATE_RECORDS_TABLE)}?player_id=eq.${encodeURIComponent(playerId)}&namespace=eq.${encodeURIComponent(namespace)}&select=namespace,payload,updated_at,sync_token&order=updated_at.desc&limit=1`;
-    const response = await fetch(url, { method: "GET", headers: makeHeaders(config) });
+  async function fetchLatestRowForNamespace(config, session, playerId, namespace) {
+    const token = effectiveSyncToken(config, playerId);
+    const url = `${config.url}/rest/v1/${encodeURIComponent(STATE_RECORDS_TABLE)}?player_id=eq.${encodeURIComponent(playerId)}&sync_token=eq.${encodeURIComponent(token)}&namespace=eq.${encodeURIComponent(namespace)}&select=namespace,payload,updated_at,sync_token&order=updated_at.desc&limit=1`;
+    let response = await fetch(url, { method: "GET", headers: makeHeaders(config, session) });
     if (!response.ok) {
       const details = await readErrorDetails(response);
       throw new Error(`Lecture cloud impossible (${response.status})${details ? `: ${details}` : ""}`);
@@ -227,12 +220,12 @@
     return rows[0];
   }
 
-  async function fetchRemoteSnapshot(config, playerId) {
+  async function fetchRemoteSnapshot(config, session, playerId) {
     const namespaces = getNamespaces();
     const snapshot = {};
     let foundAnyRow = false;
     const rows = await Promise.all(
-      namespaces.map((namespace) => fetchLatestRowForNamespace(config, playerId, namespace))
+      namespaces.map((namespace) => fetchLatestRowForNamespace(config, session, playerId, namespace))
     );
     namespaces.forEach((namespace, index) => {
       const row = rows[index];
@@ -244,6 +237,23 @@
       }
     });
     return { snapshot, foundAnyRow };
+  }
+
+  async function ensureRuntimeSession(options) {
+    const opts = options && typeof options === "object" ? options : {};
+    const refreshFn = sessionUtils && typeof sessionUtils.refreshSessionIfNeeded === "function"
+      ? sessionUtils.refreshSessionIfNeeded
+      : null;
+    const refreshed = refreshFn
+      ? await refreshFn({ force: opts.forceRefresh === true })
+      : getActiveSession();
+    if (!refreshed || !refreshed.email) {
+      throw new Error("Session cloud invalide: reconnecte-toi.");
+    }
+    if (!runtime) runtime = {};
+    runtime.session = refreshed;
+    runtime.playerId = getPlayerId(refreshed);
+    return refreshed;
   }
 
   function getStateRecordsCloudStore() {
@@ -283,7 +293,8 @@
   async function pushNow(reason) {
     if (!runtime || syncInFlight) return;
     syncInFlight = true;
-    setSyncState(runtime.playerId, { status: "syncing", lastErrorMessage: "" }, {
+    const activePlayerId = runtime.playerId;
+    setSyncState(activePlayerId, { status: "syncing", lastErrorMessage: "" }, {
       at: new Date().toISOString(),
       type: "info",
       mode: "state_records",
@@ -291,6 +302,7 @@
       message: "Synchronisation en cours"
     });
     try {
+      await ensureRuntimeSession();
       const snapshot = await buildNamespaceSnapshotFromLocal();
       const entries = Object.entries(snapshot || {});
       if (entries.length > 0) {
@@ -298,9 +310,9 @@
         if (!cloudStore) throw new Error("Store cloud indisponible.");
         await cloudStore.setMany(snapshot);
       }
-      clearDirtyTimestamp(runtime.playerId);
+      clearDirtyTimestamp(activePlayerId);
       pendingDirty = false;
-      setSyncState(runtime.playerId, {
+      setSyncState(activePlayerId, {
         status: "synced",
         lastSuccessAt: new Date().toISOString(),
         lastErrorMessage: ""
@@ -313,7 +325,7 @@
       });
       emitSyncResult({ ok: true, mode: "push", reason: reason || "auto" });
     } catch (error) {
-      setSyncState(runtime.playerId, {
+      setSyncState(activePlayerId, {
         status: "error",
         lastErrorAt: new Date().toISOString(),
         lastErrorMessage: error.message || "Erreur inconnue"
@@ -377,21 +389,23 @@
 
   async function pullNow(reason) {
     if (!runtime) return;
-    setSyncState(runtime.playerId, { status: "syncing", lastErrorMessage: "" }, {
+    const activePlayerId = runtime.playerId;
+    setSyncState(activePlayerId, { status: "syncing", lastErrorMessage: "" }, {
       at: new Date().toISOString(),
       type: "info",
       mode: "state_records",
       reason: reason || "pull",
       message: "Récupération cloud"
     });
-    const remote = await fetchRemoteSnapshot(runtime.config, runtime.playerId);
+    const activeSession = await ensureRuntimeSession();
+    const remote = await fetchRemoteSnapshot(runtime.config, activeSession, activePlayerId);
     if (!remote.foundAnyRow) {
       throw new Error("Aucune sauvegarde cloud trouvée pour ce joueur.");
     }
     await applyRemoteSnapshot(remote.snapshot);
-    clearDirtyTimestamp(runtime.playerId);
+    clearDirtyTimestamp(activePlayerId);
     pendingDirty = false;
-    setSyncState(runtime.playerId, {
+    setSyncState(activePlayerId, {
       status: "synced",
       lastSuccessAt: new Date().toISOString(),
       lastErrorMessage: ""
@@ -408,8 +422,16 @@
   async function bootstrapSync() {
     const config = readConfig();
     if (!config) return;
-    const session = getActiveSession();
+    let session = getActiveSession();
     if (!session) return;
+    if (sessionUtils && typeof sessionUtils.refreshSessionIfNeeded === "function") {
+      try {
+        session = await sessionUtils.refreshSessionIfNeeded({ force: false }) || session;
+      } catch {
+        // Keep current in-memory session if refresh fails here.
+      }
+    }
+    if (!session || !session.email) return;
     const playerId = getPlayerId(session);
     runtime = { config, session, playerId };
 
@@ -422,7 +444,8 @@
     });
 
     try {
-      const remote = await fetchRemoteSnapshot(config, playerId);
+      const activeSession = await ensureRuntimeSession();
+      const remote = await fetchRemoteSnapshot(config, activeSession, playerId);
       if (remote.foundAnyRow) {
         await applyRemoteSnapshot(remote.snapshot);
         clearDirtyTimestamp(playerId);
@@ -471,8 +494,10 @@
       url: String(config.url || "").trim().replace(/\/+$/, ""),
       anonKey: String(config.anonKey || "").trim(),
       table: STATE_RECORDS_TABLE,
-      syncToken: String(config.syncToken || "").trim() || "default",
-      accountsTable: String(config.accountsTable || "tv_manager_accounts").trim()
+      syncToken: String(config.syncToken || "").trim(),
+      adminEmails: Array.isArray(config.adminEmails)
+        ? config.adminEmails.map((email) => String(email || "").trim().toLowerCase()).filter(Boolean)
+        : []
     };
     if (!next.url || !next.anonKey) {
       throw new Error("URL et clé anon obligatoires.");
@@ -494,9 +519,9 @@
     };
   }
 
-  function forcePush() {
+  async function forcePush() {
     const config = readConfig();
-    const session = getActiveSession();
+    const session = await ensureRuntimeSession();
     if (!config || !session) {
       throw new Error("Configuration sync ou session manquante.");
     }
@@ -506,7 +531,7 @@
 
   async function forcePull() {
     const config = readConfig();
-    const session = getActiveSession();
+    const session = await ensureRuntimeSession();
     if (!config || !config.url || !config.anonKey) {
       throw new Error("Configuration sync manquante (URL ou clé anon).");
     }

@@ -96,13 +96,18 @@
 
     const rows = history.map((item) => {
       const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${formatDateLabel(item.dateKey)}</td>
-        <td>${formatPercent(item.audienceShare)}</td>
-        <td>${formatEuro(item.totalRevenue)}</td>
-        <td>${formatEuro(item.totalCosts)}</td>
-        <td class="${Number(item.netResult) >= 0 ? "kpi-positive" : "kpi-negative"}">${formatEuro(item.netResult)}</td>
-      `;
+      const dateCell = document.createElement("td");
+      dateCell.textContent = formatDateLabel(item.dateKey);
+      const audienceCell = document.createElement("td");
+      audienceCell.textContent = formatPercent(item.audienceShare);
+      const revenueCell = document.createElement("td");
+      revenueCell.textContent = formatEuro(item.totalRevenue);
+      const costsCell = document.createElement("td");
+      costsCell.textContent = formatEuro(item.totalCosts);
+      const netCell = document.createElement("td");
+      netCell.className = Number(item.netResult) >= 0 ? "kpi-positive" : "kpi-negative";
+      netCell.textContent = formatEuro(item.netResult);
+      row.append(dateCell, audienceCell, revenueCell, costsCell, netCell);
       return row;
     });
     body.replaceChildren(...rows);
@@ -270,12 +275,16 @@
     const rows = monthKeys.map((monthKey) => {
       const summary = finance.getMonthlySummary(session, monthKey);
       const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${summary && summary.monthLabel ? summary.monthLabel : monthKey}</td>
-        <td>${formatEuro(summary ? summary.totalRevenue : 0)}</td>
-        <td>${formatEuro(summary ? summary.totalExpense : 0)}</td>
-        <td class="${summary && Number(summary.netResult) >= 0 ? "kpi-positive" : "kpi-negative"}">${formatEuro(summary ? summary.netResult : 0)}</td>
-      `;
+      const monthCell = document.createElement("td");
+      monthCell.textContent = summary && summary.monthLabel ? summary.monthLabel : monthKey;
+      const revenueCell = document.createElement("td");
+      revenueCell.textContent = formatEuro(summary ? summary.totalRevenue : 0);
+      const expenseCell = document.createElement("td");
+      expenseCell.textContent = formatEuro(summary ? summary.totalExpense : 0);
+      const netCell = document.createElement("td");
+      netCell.className = summary && Number(summary.netResult) >= 0 ? "kpi-positive" : "kpi-negative";
+      netCell.textContent = formatEuro(summary ? summary.netResult : 0);
+      row.append(monthCell, revenueCell, expenseCell, netCell);
       return row;
     });
     body.replaceChildren(...rows);

@@ -8,6 +8,7 @@
   const bank = window.PlayerBank;
   const programCatalog = window.ProgramCatalog;
   const presenterEngine = window.PresenterEngine;
+  const financeEngine = window.FinanceEngine;
   const sessionUtils = window.SessionUtils;
   let pendingDeleteEntry = null;
   let pendingEditEntryId = null;
@@ -85,6 +86,16 @@
     }
   };
   const PRODUCTION_COST_BASE = 35000;
+  const WEEKLY_MAX_WORK_MINUTES = 39 * 60;
+  const OFF_AIR_MINUTES_BY_DURATION = Object.freeze({
+    5: 25,
+    15: 45,
+    30: 60,
+    45: 75,
+    60: 90,
+    90: 120,
+    120: 150
+  });
   const PRODUCTION_SUBTYPE_MULTIPLIER = {
     JT: 1.25,
     "Météo": 0.75,
@@ -269,7 +280,7 @@
   }
 
   function formatStarBonusLabel(value) {
-    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
+    const safe = Math.max(0, Math.min(1, Number(value) || 0));
     const text = Number.isInteger(safe) ? String(safe) : String(safe).replace(".", ",");
     return `+${text}★`;
   }
@@ -292,7 +303,7 @@
 
   function computeEffectivePresenterBonus(presenter, subtype) {
     if (!presenterMatchesSubtype(presenter, subtype)) return 0;
-    return Math.max(0, Math.min(2, Number(presenter && presenter.starBonus) || 0));
+    return Math.max(0, Math.min(1, Number(presenter && presenter.starBonus) || 0));
   }
 
   function normalizePresenterIds(value, fallbackId) {
@@ -313,12 +324,25 @@
     return names;
   }
 
+  function normalizeSingleStaffId(value) {
+    const id = String(value || "").trim();
+    return id ? [id] : [];
+  }
+
   function getEntryPresenterDisplayName(entry) {
     if (!entry) return "-";
     if (Array.isArray(entry.presenterNames) && entry.presenterNames.length > 0) {
       return entry.presenterNames.join(", ");
     }
     return String(entry.presenterName || "-");
+  }
+
+  function getEntrySingleStaffDisplayName(entry, role) {
+    if (!entry) return "-";
+    const safeRole = String(role || "").trim();
+    if (safeRole === "directors") return String(entry.directorName || "-");
+    if (safeRole === "producers") return String(entry.producerName || "-");
+    return "-";
   }
 
   function openProductionModal() {
@@ -416,6 +440,39 @@
     day.setHours(0, 0, 0, 0);
     day.setDate(day.getDate() + 1);
     return formatDateKey(day);
+  }
+
+  function getNextDateKey(dateKey) {
+    const date = parseDateKey(dateKey);
+    if (!date) return "";
+    const copy = new Date(date);
+    copy.setDate(copy.getDate() + 1);
+    return formatDateKey(copy);
+  }
+
+  function isDatePublished(dateKey) {
+    const safeDateKey = String(dateKey || "");
+    if (!safeDateKey) return false;
+    if (!financeEngine || typeof financeEngine.isGridPublished !== "function") return false;
+    return financeEngine.isGridPublished(session, safeDateKey);
+  }
+
+  function collectPublishedRecurringOccurrencesFrom(entry, fromDateKey) {
+    if (!entry || entry.recurrenceMode !== "recurring") return [];
+    const fromKey = String(fromDateKey || "");
+    if (!fromKey) return [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const blocked = [];
+    for (let offset = 0; offset <= 14; offset += 1) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + offset);
+      const dateKey = formatDateKey(date);
+      if (dateKey < fromKey) continue;
+      if (!recurringOccursOnDate(entry, dateKey)) continue;
+      if (isDatePublished(dateKey)) blocked.push(dateKey);
+    }
+    return blocked;
   }
 
   function isPastYesterday(dateKey) {
@@ -613,6 +670,7 @@
     const isSingle = entry && entry.recurrenceMode === "single";
     const isRecurring = entry && entry.recurrenceMode === "recurring";
     const singleLocked = isSingle && isSingleEntryLockedForDelete(entry);
+    const singlePublished = isSingle && isDatePublished(String(entry.dateKey || ""));
     const scheduling = (!isSingle && !isRecurring && programCatalog && typeof programCatalog.getProgramSchedulingForCurrentSession === "function")
       ? programCatalog.getProgramSchedulingForCurrentSession(entry.title)
       : { isScheduled: false, dateKeys: [] };
@@ -620,9 +678,11 @@
     pendingDeleteEntry = entry;
     body.replaceChildren();
 
-    if (singleLocked) {
+    if (singleLocked || singlePublished) {
       const intro = document.createElement("p");
-      intro.textContent = "Suppression impossible pour un programme prévu hier.";
+      intro.textContent = singlePublished
+        ? "Suppression impossible : la journée est publiée."
+        : "Suppression impossible pour un programme prévu hier.";
       body.append(intro);
       closeBtn.classList.remove("hidden");
       cancelBtn.classList.add("hidden");
@@ -634,7 +694,7 @@
         body.append(intro);
       } else {
         const intro = document.createElement("p");
-        intro.textContent = `Choisissez la date de fin de récurrence pour « ${entry.title} ».`;
+        intro.textContent = `Choisis la date de fin de récurrence pour « ${entry.title} ».`;
         const label = document.createElement("label");
         label.setAttribute("for", "studioRecurringEndDateInput");
         label.textContent = "Date de fin";
@@ -806,9 +866,20 @@
             return;
           }
         }
+        const removeFromDateKey = recurringStarted
+          ? (endDateKey === getTodayDateKey() ? getTodayDateKey() : getNextDateKey(endDateKey))
+          : getTodayDateKey();
+        const publishedRecurringDates = collectPublishedRecurringOccurrencesFrom(pendingDeleteEntry, removeFromDateKey);
+        if (publishedRecurringDates.length > 0) {
+          setProductionFeedback(
+            `Suppression impossible : ${formatDateLabel(publishedRecurringDates[0])} est publiée.`,
+            "error"
+          );
+          return;
+        }
         const current = loadSchedule();
         if (!recurringStarted) {
-          trimRecurringEntryFromDateGrid(pendingDeleteEntry, "");
+          removeScheduleEntryFromDateGrid(pendingDeleteEntry, { fromDateKey: removeFromDateKey });
           const remaining = current.filter((entry) => entry.id !== pendingDeleteEntry.id);
           saveSchedule(remaining);
           const stillUsed = remaining.some((entry) => entry && entry.title === pendingDeleteEntry.title);
@@ -818,13 +889,16 @@
           setProductionFeedback("Récurrence supprimée.", "success");
           await forceCloudPushBestEffort();
         } else {
+          const effectiveEndDateKey = endDateKey === getTodayDateKey()
+            ? getYesterdayDateKey()
+            : endDateKey;
           const next = current.map((entry) => (
             entry.id === pendingDeleteEntry.id
-              ? { ...entry, recurrenceEndDate: endDateKey }
+              ? { ...entry, recurrenceEndDate: effectiveEndDateKey }
               : entry
           ));
-          trimRecurringEntryFromDateGrid(pendingDeleteEntry, endDateKey);
-          if (isPastYesterday(endDateKey)) {
+          removeScheduleEntryFromDateGrid(pendingDeleteEntry, { fromDateKey: removeFromDateKey });
+          if (isPastYesterday(effectiveEndDateKey)) {
             const remaining = next.filter((entry) => entry.id !== pendingDeleteEntry.id);
             saveSchedule(remaining);
             const stillUsed = remaining.some((entry) => entry && entry.title === pendingDeleteEntry.title);
@@ -835,7 +909,11 @@
             await forceCloudPushBestEffort();
           } else {
             saveSchedule(next);
-            setProductionFeedback(`Récurrence programmée jusqu'au ${formatDateLabel(endDateKey)}.`, "success");
+            if (endDateKey === getTodayDateKey()) {
+              setProductionFeedback("Récurrence arrêtée à partir d'aujourd'hui.", "success");
+            } else {
+              setProductionFeedback(`Récurrence programmée jusqu'au ${formatDateLabel(endDateKey)}.`, "success");
+            }
             await forceCloudPushBestEffort();
           }
         }
@@ -845,6 +923,11 @@
       }
 
       if (isSingle) {
+        const singleDateKey = String(pendingDeleteEntry.dateKey || "");
+        if (isDatePublished(singleDateKey)) {
+          setProductionFeedback("Suppression impossible : la journée est publiée.", "error");
+          return;
+        }
         const current = loadSchedule();
         const groupId = String(pendingDeleteEntry.productionGroupId || "");
         const groupedEntries = current.filter((entry) => {
@@ -1020,6 +1103,16 @@
     const targetDuration = Math.max(5, Number(getProgramDuration(programEntry.categoryId || "information", programEntry.title || "")) || 60);
     const targetStart = Math.max(DAY_START_MINUTE, Math.min(DAY_END_MINUTE - 5, Number(targetStartMinute) || DAY_START_MINUTE));
     const targetEnd = Math.min(DAY_END_MINUTE, targetStart + targetDuration);
+    const incomingMode = String(programEntry && programEntry.productionMode || "").trim().toLowerCase();
+    const shouldProtectRecorded = incomingMode === "direct";
+    const hasProtectedOverlap = shouldProtectRecorded && timed.some((item) => {
+      const existingMode = String(item && item.entry && item.entry.productionMode || "").trim().toLowerCase();
+      if (existingMode !== "recorded") return false;
+      return item.start < targetEnd && targetStart < item.end;
+    });
+    if (hasProtectedOverlap) {
+      return timed.map((item) => item.entry);
+    }
 
     const keptTimed = timed
       .filter((item) => item.end <= targetStart || item.start >= targetEnd)
@@ -1027,13 +1120,13 @@
       .filter((entry) => {
         const forcedId = String(programEntry.studioScheduleId || "");
         if (forcedId && String(entry.studioScheduleId || "") === forcedId) return false;
-        const sameLegacySlot = (
+        const sameScheduledSlot = (
           !forcedId
           && entry.title === programEntry.title
           && entry.categoryId === programEntry.categoryId
           && Number(entry.fixedStartMinute) === targetStart
         );
-        return !sameLegacySlot;
+        return !sameScheduledSlot;
       });
 
     const next = [];
@@ -1215,8 +1308,12 @@
     const presenterIds = normalizePresenterIds(raw.presenterIds, presenterId);
     const presenterNames = normalizePresenterNames(raw.presenterNames, presenterName);
     const presenterStarBonuses = Array.isArray(raw.presenterStarBonuses)
-      ? raw.presenterStarBonuses.map((value) => Math.max(0, Math.min(2, Number(value) || 0)))
+      ? raw.presenterStarBonuses.map((value) => Math.max(0, Math.min(1, Number(value) || 0)))
       : [];
+    const directorId = String(raw.directorId || "").trim();
+    const directorName = String(raw.directorName || "").trim();
+    const producerId = String(raw.producerId || "").trim();
+    const producerName = String(raw.producerName || "").trim();
     const studioId = String(raw.studioId || "studio_1").trim() || "studio_1";
     const studioName = String(raw.studioName || "Studio TV 1").trim() || "Studio TV 1";
     const presentersCount = Math.max(
@@ -1253,11 +1350,15 @@
       presenterId: presenterId || "",
       presenterName: presenterName || "",
       presenterStarBonus: Number.isFinite(presenterStarBonus)
-        ? Math.max(0, Math.min(2, presenterStarBonus))
+        ? Math.max(0, Math.min(1, presenterStarBonus))
         : 0,
       presenterIds,
       presenterNames,
       presenterStarBonuses,
+      directorId,
+      directorName,
+      producerId,
+      producerName,
       studioId,
       studioName,
       presentersCount: Math.min(maxPeopleOnSet, presentersCount),
@@ -1302,6 +1403,27 @@
     const rangeA = getStudioOccupiedRange(a);
     const rangeB = getStudioOccupiedRange(b);
     return rangeA.start < rangeB.end && rangeB.start < rangeA.end;
+  }
+
+  function getDiffusionRange(entry) {
+    const duration = Math.max(5, Number(entry && entry.duration) || 0);
+    const start = Number.isFinite(Number(entry && entry.startMinute))
+      ? Number(entry.startMinute)
+      : 0;
+    return {
+      start,
+      end: start + duration
+    };
+  }
+
+  function hasDiffusionOverlap(a, b) {
+    const rangeA = getDiffusionRange(a);
+    const rangeB = getDiffusionRange(b);
+    return rangeA.start < rangeB.end && rangeB.start < rangeA.end;
+  }
+
+  function hasOccupancyOrDiffusionOverlap(a, b) {
+    return hasTimeOverlap(a, b) || hasDiffusionOverlap(a, b);
   }
 
   function getStudioOccupiedRange(entry) {
@@ -1355,11 +1477,128 @@
     return overlapDays.length > 0;
   }
 
+  function getEntryStaffIdsByRole(entry, role) {
+    if (!entry) return [];
+    const safeRole = String(role || "").trim();
+    if (safeRole === "directors") return normalizeSingleStaffId(entry.directorId);
+    if (safeRole === "producers") return normalizeSingleStaffId(entry.producerId);
+    return normalizePresenterIds(entry.presenterIds, entry.presenterId);
+  }
+
+  function getOffAirMinutes(duration) {
+    const safe = Math.max(5, Math.round(Number(duration) || 0));
+    if (Object.prototype.hasOwnProperty.call(OFF_AIR_MINUTES_BY_DURATION, safe)) {
+      return OFF_AIR_MINUTES_BY_DURATION[safe];
+    }
+    return Math.max(30, Math.round(safe * 1.25));
+  }
+
+  function getEntryTotalWorkMinutes(entry) {
+    const duration = Math.max(5, Math.round(Number(entry && entry.duration) || 60));
+    return duration + getOffAirMinutes(duration);
+  }
+
+  function occursOnDate(entry, dateKey) {
+    if (!entry || !dateKey) return false;
+    if (entry.recurrenceMode === "single") {
+      return String(entry.dateKey || "") === dateKey;
+    }
+    if (entry.recurrenceMode === "recurring") {
+      return recurringOccursOnDate(entry, dateKey);
+    }
+    return false;
+  }
+
+  function listDateKeysFromToday(days) {
+    const safeDays = Math.max(1, Math.floor(Number(days) || 1));
+    const base = new Date();
+    base.setHours(0, 0, 0, 0);
+    const keys = [];
+    for (let offset = 0; offset < safeDays; offset += 1) {
+      const date = new Date(base);
+      date.setDate(base.getDate() + offset);
+      keys.push(formatDateKey(date));
+    }
+    return keys;
+  }
+
+  function formatWorkMinutes(value) {
+    const minutes = Math.max(0, Math.round(Number(value) || 0));
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return `${hours}h${String(rest).padStart(2, "0")}`;
+  }
+
+  function computeMaxWeeklyWorkMinutes(entries, staffId, role) {
+    const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+    const dateKeys = listDateKeysFromToday(21);
+    const dailyMinutes = dateKeys.map((dateKey) => {
+      let total = 0;
+      safeEntries.forEach((entry) => {
+        if (!getEntryStaffIdsByRole(entry, role).includes(staffId)) return;
+        if (!occursOnDate(entry, dateKey)) return;
+        total += getEntryTotalWorkMinutes(entry);
+      });
+      return total;
+    });
+
+    let max = 0;
+    for (let start = 0; start < dailyMinutes.length; start += 1) {
+      let sum = 0;
+      for (let index = start; index < Math.min(start + 7, dailyMinutes.length); index += 1) {
+        sum += dailyMinutes[index];
+      }
+      if (sum > max) max = sum;
+    }
+    return { minutes: max };
+  }
+
+  function checkStaffWeeklyLimit(entries, candidates, selectedStaffIds, staffNamesById, role, fallbackName) {
+    const staffIds = Array.isArray(selectedStaffIds)
+      ? selectedStaffIds.map((id) => String(id || "").trim()).filter(Boolean)
+      : [];
+    const safeRole = String(role || "").trim();
+    const safeFallback = String(fallbackName || "Intervenant");
+    const allEntries = [...(Array.isArray(entries) ? entries : []), ...(Array.isArray(candidates) ? candidates : [])];
+    for (let i = 0; i < staffIds.length; i += 1) {
+      const staffId = staffIds[i];
+      const workdays = new Set();
+      allEntries.forEach((entry) => {
+        if (!getEntryStaffIdsByRole(entry, safeRole).includes(staffId)) return;
+        if (entry.recurrenceMode === "recurring") {
+          (Array.isArray(entry.recurrenceDays) ? entry.recurrenceDays : [])
+            .forEach((weekday) => workdays.add(Number(weekday)));
+          return;
+        }
+        if (entry.recurrenceMode === "single") {
+          const weekday = dateToWeekday(entry.dateKey);
+          if (Number.isInteger(weekday)) workdays.add(weekday);
+        }
+      });
+      if (workdays.size > 5) {
+        const name = staffNamesById[staffId] || safeFallback;
+        return {
+          ok: false,
+          message: `${name} dépasse la limite de 5 jours d'antenne par semaine.`
+        };
+      }
+      const weeklyLoad = computeMaxWeeklyWorkMinutes(allEntries, staffId, safeRole);
+      if (weeklyLoad.minutes > WEEKLY_MAX_WORK_MINUTES) {
+        const name = staffNamesById[staffId] || safeFallback;
+        return {
+          ok: false,
+          message: `${name} dépasse la limite de 39h/semaine (${formatWorkMinutes(weeklyLoad.minutes)} sur 7 jours).`
+        };
+      }
+    }
+    return { ok: true };
+  }
+
   function hasScheduleConflict(entries, candidate, ignoredId) {
     return entries.some((entry) => {
       if (!entry) return false;
       if (ignoredId && entry.id === ignoredId) return false;
-      if (!hasTimeOverlap(candidate, entry)) return false;
+      if (!hasOccupancyOrDiffusionOverlap(candidate, entry)) return false;
 
       if (candidate.recurrenceMode === "single" && entry.recurrenceMode === "single") {
         return entry.dateKey === candidate.dateKey;
@@ -1592,6 +1831,8 @@
     }
     addDetailRow("Classification", ratingLabel);
     addDetailRow("Journaliste(s)", getEntryPresenterDisplayName(entry));
+    addDetailRow("Réalisateur", getEntrySingleStaffDisplayName(entry, "directors"));
+    addDetailRow("Producteur", getEntrySingleStaffDisplayName(entry, "producers"));
     addDetailRow("Studio TV", String(entry.studioName || "Studio TV 1"));
     addDetailRow(
       "Plateau",
@@ -2095,6 +2336,10 @@
       const creationGroupId = (!editingEntry && recurrenceMode === "single")
         ? `grp_${Date.now()}_${Math.floor(Math.random() * 10000)}`
         : "";
+      const directorId = editingEntry ? String(editingEntry.directorId || "").trim() : "";
+      const directorName = editingEntry ? String(editingEntry.directorName || "").trim() : "";
+      const producerId = editingEntry ? String(editingEntry.producerId || "").trim() : "";
+      const producerName = editingEntry ? String(editingEntry.producerName || "").trim() : "";
       const basePayload = {
         dateKey: recurrenceMode === "single"
           ? (editingEntry ? String(editingEntry.dateKey || "") : dateKey)
@@ -2114,7 +2359,11 @@
         maxPeopleOnSet: editingEntry ? Math.max(1, Number(editingEntry.maxPeopleOnSet) || 3) : 3,
         presenterId,
         presenterName,
-        presenterStarBonus
+        presenterStarBonus,
+        directorId,
+        directorName,
+        producerId,
+        producerName
       };
       const candidates = [
         {
@@ -2133,10 +2382,57 @@
         });
       }
       const hasAnyConflict = candidates.some((candidate) => hasScheduleConflict(current, candidate, editingEntry ? editingEntry.id : null))
-        || (candidates.length > 1 && hasTimeOverlap(candidates[0], candidates[1]));
+        || (candidates.length > 1 && hasOccupancyOrDiffusionOverlap(candidates[0], candidates[1]));
       if (hasAnyConflict) {
         setProductionFeedback("Conflit de planning : le studio TV est déjà occupé sur ce créneau.", "error");
         return;
+      }
+      const presenterNamesById = {};
+      if (presenterId) {
+        presenterNamesById[presenterId] = presenterName || "Journaliste";
+      }
+      const workloadEntries = editingEntry
+        ? current.filter((entry) => entry && entry.id !== editingEntry.id)
+        : current;
+      const workloadValidation = checkStaffWeeklyLimit(
+        workloadEntries,
+        candidates,
+        presenterId ? [presenterId] : [],
+        presenterNamesById,
+        "journalists",
+        "Journaliste"
+      );
+      if (!workloadValidation.ok) {
+        setProductionFeedback(workloadValidation.message, "error");
+        return;
+      }
+      if (directorId) {
+        const directorValidation = checkStaffWeeklyLimit(
+          workloadEntries,
+          candidates,
+          [directorId],
+          { [directorId]: directorName || "Réalisateur" },
+          "directors",
+          "Réalisateur"
+        );
+        if (!directorValidation.ok) {
+          setProductionFeedback(directorValidation.message, "error");
+          return;
+        }
+      }
+      if (producerId) {
+        const producerValidation = checkStaffWeeklyLimit(
+          workloadEntries,
+          candidates,
+          [producerId],
+          { [producerId]: producerName || "Producteur" },
+          "producers",
+          "Producteur"
+        );
+        if (!producerValidation.ok) {
+          setProductionFeedback(producerValidation.message, "error");
+          return;
+        }
       }
 
       if (!programCatalog || typeof programCatalog.createProducedProgramForCurrentSession !== "function") {
@@ -2152,6 +2448,10 @@
         presenterId,
         presenterName,
         presenterStarBonus,
+        directorId,
+        directorName,
+        producerId,
+        producerName,
         starsOverride: Math.max(0.5, Math.min(5, computeStudioProductionStars() + presenterStarBonus))
       });
       if (!creation || !creation.ok) {
@@ -2162,7 +2462,11 @@
         programCatalog.setProducedProgramPresenterForCurrentSession(title, {
           presenterId,
           presenterName,
-          presenterStarBonus
+          presenterStarBonus,
+          directorId,
+          directorName,
+          producerId,
+          producerName
         });
       }
 

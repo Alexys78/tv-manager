@@ -115,6 +115,16 @@
     return String((program && program.ageRating) || "");
   }
 
+  function canDisplaySubtype(categoryId) {
+    const safe = String(categoryId || "").trim();
+    return safe !== "series" && safe !== "films";
+  }
+
+  function getProgramSubtype(program, categoryId) {
+    if (!canDisplaySubtype(categoryId)) return "";
+    return String(program && (program.subtype || program.productionSubtype) || "").trim();
+  }
+
   function normalizeStars(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || numeric <= 0) return 0.5;
@@ -339,7 +349,7 @@
 
     const kpiAvg = document.createElement("div");
     kpiAvg.className = "owned-kpi";
-    kpiAvg.innerHTML = `<span>Coût moyen diffusion</span><strong>${formatEuro(averageCost)}</strong>`;
+    kpiAvg.innerHTML = `<span>Coût moyen de diffusion</span><strong>${formatEuro(averageCost)}</strong>`;
 
     const ineditCount = visiblePrograms.filter((program) => getProgramStatus(program, activeCategory.id) === "inedit").length;
     const kpiStatus = document.createElement("div");
@@ -629,10 +639,7 @@
       studioBtn.className = "market-buy-btn secondary-btn";
       studioBtn.textContent = "Studio";
       studioBtn.addEventListener("click", () => {
-        const target = (sessionUtils && typeof sessionUtils.withSession === "function")
-          ? sessionUtils.withSession("studio.html", session)
-          : "studio.html";
-        window.location.href = target;
+        window.location.href = "studio.html";
       });
       return studioBtn;
     }
@@ -756,6 +763,13 @@
       titleBtn.className = "owned-title-btn";
       titleBtn.textContent = program.title;
       tdName.appendChild(titleBtn);
+      const subtype = getProgramSubtype(program, activeCategory.id);
+      if (subtype) {
+        const subtypeMeta = document.createElement("div");
+        subtypeMeta.className = "market-program-meta";
+        subtypeMeta.textContent = `Sous-type : ${subtype}`;
+        tdName.appendChild(subtypeMeta);
+      }
 
       const tdDuration = document.createElement("td");
       tdDuration.textContent = `${getProgramDuration(program)} min`;

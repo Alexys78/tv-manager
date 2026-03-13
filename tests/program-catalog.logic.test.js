@@ -10,7 +10,11 @@ function seedSession(localStorage) {
   const session = {
     username: 'TestUser',
     email: 'test@example.com',
-    connectedAt: new Date().toISOString()
+    connectedAt: new Date().toISOString(),
+    accessToken: 'test.header.signature',
+    refreshToken: 'test-refresh-token',
+    tokenType: 'bearer',
+    expiresAt: new Date(Date.now() + 3600_000).toISOString()
   };
   localStorage.setItem('tv_manager_users', JSON.stringify([{ username: session.username, email: session.email, password: 'secret123' }]));
   localStorage.setItem('tv_manager_session', JSON.stringify(session));

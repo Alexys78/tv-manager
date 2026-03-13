@@ -46,7 +46,7 @@
     }
   }
 
-  function createLegacyKeyResolver(playerId) {
+  function createNamespaceKeyResolver(playerId) {
     const base = {
       bank_balance: `${appKeys.BANK_KEY_PREFIX || "tv_manager_bank_"}${playerId}`,
       date_grid: `${appKeys.DATE_GRID_KEY_PREFIX || "tv_manager_date_grid_"}${playerId}`,
@@ -59,6 +59,7 @@
       owned_details: `${appKeys.OWNED_DETAILS_KEY_PREFIX || "tv_manager_owned_program_details_"}${playerId}`,
       studio_state: `${appKeys.STUDIO_KEY_PREFIX || "tv_manager_studio_"}${playerId}`,
       studio_schedule: `${appKeys.STUDIO_SCHEDULE_KEY_PREFIX || "tv_manager_studio_schedule_"}${playerId}`,
+      studio_productions: `${appKeys.STUDIO_PRODUCTIONS_KEY_PREFIX || "tv_manager_studio_productions_"}${playerId}`,
       presenters: `${appKeys.PRESENTERS_KEY_PREFIX || "tv_manager_presenters_"}${playerId}`,
       ad_settings: `${appKeys.AD_SETTINGS_KEY_PREFIX || "tv_manager_ad_settings_"}${playerId}`,
       ad_slot_plan: `${appKeys.AD_SLOT_PLAN_KEY_PREFIX || "tv_manager_ad_slot_plan_"}${playerId}`,
@@ -108,7 +109,7 @@
     constructor(session) {
       this.session = session || null;
       this.playerId = sessionUtils.getPlayerId(session);
-      this.resolver = createLegacyKeyResolver(this.playerId);
+      this.resolver = createNamespaceKeyResolver(this.playerId);
     }
 
     async get(namespace) {
@@ -195,16 +196,30 @@
     }
 
     effectiveSyncToken() {
-      return this.syncToken || "default";
+      return this.syncToken || this.playerId || "default";
+    }
+
+    assertAuthReady() {
+      if (!this.url || !this.anonKey) {
+        throw new Error("Configuration cloud incomplète.");
+      }
+      if (!this.playerId) {
+        throw new Error("Identifiant joueur introuvable.");
+      }
     }
 
     headers() {
+      this.assertAuthReady();
       return {
         apikey: this.anonKey,
         Authorization: `Bearer ${this.anonKey}`,
         "Content-Type": "application/json",
         Prefer: "return=representation"
       };
+    }
+
+    async fetchWithAuth(url, options) {
+      return fetch(url, options);
     }
 
     whereNamespace(namespace) {
@@ -214,7 +229,7 @@
 
     async get(namespace) {
       const url = `${this.whereNamespace(namespace)}&select=namespace,payload&limit=1`;
-      const response = await fetch(url, { method: "GET", headers: this.headers() });
+      const response = await this.fetchWithAuth(url, { method: "GET", headers: this.headers() });
       if (!response.ok) {
         const details = await readErrorDetails(response);
         throw new Error(`Cloud read failed (${response.status})${details ? `: ${details}` : ""}`);
@@ -234,7 +249,7 @@
         updated_at: new Date().toISOString()
       }];
       const url = `${this.url}/rest/v1/${encodeURIComponent(this.table)}`;
-      const response = await fetch(url, {
+      const response = await this.fetchWithAuth(url, {
         method: "POST",
         headers: {
           ...this.headers(),
@@ -270,7 +285,7 @@
         updated_at: new Date().toISOString()
       }));
       const url = `${this.url}/rest/v1/${encodeURIComponent(this.table)}`;
-      const response = await fetch(url, {
+      const response = await this.fetchWithAuth(url, {
         method: "POST",
         headers: {
           ...this.headers(),

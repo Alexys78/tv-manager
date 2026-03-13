@@ -121,12 +121,14 @@
       }
     }
     if (!playerDay && !Array.isArray(playerDay)) {
-      const playerWeek = engine.readPlayerWeek(sessionData);
-      playerDay = playerWeek[dayKey];
+      playerDay = [];
     }
+    const playerChannelName = sessionUtils && typeof sessionUtils.getPlayerChannelName === "function"
+      ? sessionUtils.getPlayerChannelName(sessionData)
+      : (sessionData.username || "Ta chaîne");
     const simulation = engine.simulateDay(
       dayKey,
-      sessionData.username ? `${sessionData.username} TV` : "Ta chaîne",
+      playerChannelName,
       playerDay,
       { sessionData, dateKey }
     );

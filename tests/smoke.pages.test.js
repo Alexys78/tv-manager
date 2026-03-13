@@ -16,7 +16,9 @@ const APP_PAGES = [
   'studio.html',
   'recrutement.html',
   'mon-personnel.html',
-  'production-studio.html'
+  'production-studio.html',
+  'suivi-productions.html',
+  'versions.html'
 ];
 
 function read(file) {

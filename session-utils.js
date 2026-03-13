@@ -3,8 +3,6 @@
     SESSION_KEY: "tv_manager_session",
     LAST_EMAIL_KEY: "tv_manager_last_email",
     LOGOUT_AT_KEY: "tv_manager_logout_at",
-    WEEK_GRID_KEY_PREFIX: "tv_manager_week_grid_",
-    LEGACY_GRID_KEY_PREFIX: "tv_manager_grid_",
     DATE_GRID_KEY_PREFIX: "tv_manager_date_grid_",
     GRID_PUBLICATION_KEY_PREFIX: "tv_manager_grid_publication_",
     RESULTS_KEY_PREFIX: "tv_manager_audience_results_",
@@ -19,6 +17,7 @@
     OWNED_DETAILS_KEY_PREFIX: "tv_manager_owned_program_details_",
     STUDIO_KEY_PREFIX: "tv_manager_studio_",
     STUDIO_SCHEDULE_KEY_PREFIX: "tv_manager_studio_schedule_",
+    STUDIO_PRODUCTIONS_KEY_PREFIX: "tv_manager_studio_productions_",
     PRESENTERS_KEY_PREFIX: "tv_manager_presenters_",
     DYNAMIC_FILMS_KEY_PREFIX: "tv_manager_dynamic_films_",
     DYNAMIC_FILMS_REVISION_KEY_PREFIX: "tv_manager_dynamic_films_revision_",
@@ -32,9 +31,83 @@
   const DAY_START_MINUTE = 5 * 60;
   const DAY_END_MINUTE = 25 * 60;
 
+  function toSafeString(value) {
+    return String(value || "").trim();
+  }
+
+  function parseIsoDate(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
+  function normalizeEmail(value) {
+    return toSafeString(value).toLowerCase();
+  }
+
+  function sanitizeUsername(value, fallbackEmail) {
+    const cleaned = String(value || "")
+      .replace(/[<>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
+    if (cleaned) return cleaned;
+    const safeFallback = String(fallbackEmail || "")
+      .replace(/[<>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
+    return safeFallback || "Joueur";
+  }
+
+  function normalizeAdminEmails(rawList) {
+    if (!Array.isArray(rawList)) return [];
+    return rawList
+      .map((value) => normalizeEmail(value))
+      .filter(Boolean);
+  }
+
+  function resolveAdminFlag(email) {
+    const safeEmail = normalizeEmail(email);
+    const config = window.TVManagerCloudConfig && typeof window.TVManagerCloudConfig.read === "function"
+      ? window.TVManagerCloudConfig.read()
+      : null;
+    const configuredAdmins = normalizeAdminEmails(config && config.adminEmails);
+    if (configuredAdmins.includes(safeEmail)) return true;
+    return false;
+  }
+
+  function normalizeSession(sessionData) {
+    if (!sessionData || typeof sessionData !== "object") return null;
+    const email = normalizeEmail(sessionData.email);
+    if (!email) return null;
+    const connectedAtRaw = parseIsoDate(sessionData.connectedAt);
+    const connectedAt = connectedAtRaw ? connectedAtRaw.toISOString() : new Date().toISOString();
+    const expiresAtRaw = parseIsoDate(sessionData.expiresAt);
+    return {
+      username: sanitizeUsername(sessionData.username, email),
+      email,
+      connectedAt,
+      supabaseUserId: "",
+      accessToken: toSafeString(sessionData.accessToken),
+      refreshToken: toSafeString(sessionData.refreshToken),
+      tokenType: toSafeString(sessionData.tokenType || "bearer").toLowerCase(),
+      expiresAt: expiresAtRaw ? expiresAtRaw.toISOString() : null,
+      isAdmin: Boolean(sessionData.isAdmin) || resolveAdminFlag(email),
+      legacyAuth: sessionData.legacyAuth !== false
+    };
+  }
+
   function getPlayerId(sessionData) {
     if (!sessionData || typeof sessionData !== "object") return "player";
     return sessionData.email || sessionData.username || "player";
+  }
+
+  function getPlayerChannelName(sessionData) {
+    if (!sessionData || typeof sessionData !== "object") return "Ta chaîne";
+    const username = sanitizeUsername(sessionData.username, "");
+    if (!username || username === "Joueur") return "Ta chaîne";
+    return `${username} TV`;
   }
 
   function toDateKey(date) {
@@ -75,27 +148,12 @@
     }).format(Number(value) || 0);
   }
 
-  function decodeSessionToken(token) {
-    if (!token) return null;
-    try {
-      const utf8 = atob(token);
-      const json = decodeURIComponent(utf8);
-      const parsed = JSON.parse(json);
-      if (!parsed || !parsed.email) return null;
-      return {
-        username: parsed.username || "",
-        email: parsed.email,
-        connectedAt: parsed.connectedAt || new Date().toISOString()
-      };
-    } catch {
-      return null;
-    }
+  function decodeSessionToken() {
+    return null;
   }
 
-  function parseIsoDate(value) {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date : null;
+  function encodeSessionToken() {
+    return "";
   }
 
   function isTokenRevoked(sessionData) {
@@ -109,66 +167,69 @@
     return connectedAt.getTime() <= logoutAt.getTime();
   }
 
-  function encodeSessionToken(sessionData) {
-    if (!sessionData || !sessionData.email) return "";
-    const json = JSON.stringify(sessionData);
-    const utf8 = encodeURIComponent(json);
-    return btoa(utf8);
+  function isSessionExpired() {
+    return false;
+  }
+
+  function hasCloudAccess(sessionData) {
+    if (!sessionData || !sessionData.email) return false;
+    return true;
+  }
+
+  function canAccessAdmin(sessionData) {
+    const safeSession = sessionData && typeof sessionData === "object" ? sessionData : null;
+    if (!safeSession || !safeSession.email) return false;
+    const config = window.TVManagerCloudConfig && typeof window.TVManagerCloudConfig.read === "function"
+      ? window.TVManagerCloudConfig.read()
+      : null;
+    const configuredAdmins = normalizeAdminEmails(config && config.adminEmails);
+    if (configuredAdmins.length > 0) return configuredAdmins.includes(normalizeEmail(safeSession.email));
+    return Boolean(safeSession.email);
   }
 
   function persistSession(sessionData) {
-    if (!sessionData || !sessionData.email) return;
+    const normalized = normalizeSession(sessionData);
+    if (!normalized || !normalized.email) return null;
     localStorage.removeItem(LOGOUT_AT_KEY);
-    localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-    localStorage.setItem(LAST_EMAIL_KEY, sessionData.email);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(normalized));
+    localStorage.setItem(LAST_EMAIL_KEY, normalized.email);
+    return normalized;
+  }
+
+  function clearSession(options) {
+    const opts = options && typeof options === "object" ? options : {};
+    if (opts.markLoggedOut !== false) {
+      localStorage.setItem(LOGOUT_AT_KEY, new Date().toISOString());
+    }
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(LAST_EMAIL_KEY);
+  }
+
+  function readStoredSession() {
+    try {
+      const rawSession = localStorage.getItem(SESSION_KEY);
+      if (!rawSession) return null;
+      const parsed = normalizeSession(JSON.parse(rawSession));
+      if (!parsed) return null;
+      if (isTokenRevoked(parsed)) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
   }
 
   function recoverSessionFromLocation(options) {
     const opts = options && typeof options === "object" ? options : {};
     const persist = opts.persist !== false;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = urlParams.get("session");
-
-    const tokenSession = decodeSessionToken(tokenFromUrl);
-    if (tokenSession && !isTokenRevoked(tokenSession)) {
-      if (persist) persistSession(tokenSession);
-      return tokenSession;
-    }
-
-    const rawSession = localStorage.getItem(SESSION_KEY);
-    if (rawSession) {
-      try {
-        const parsed = JSON.parse(rawSession);
-        if (parsed && parsed.email && !isTokenRevoked(parsed)) return parsed;
-      } catch {
-        // fallback below
-      }
-    }
-
-    return null;
+    const parsed = readStoredSession();
+    if (!parsed) return null;
+    if (persist) persistSession(parsed);
+    return parsed;
   }
 
   function withSession(path, sessionData) {
-    const currentSession = sessionData || recoverSessionFromLocation({ persist: true });
-    if (currentSession && currentSession.email) {
-      persistSession(currentSession);
-      const token = encodeSessionToken(currentSession);
-      if (!token) return path;
-      try {
-        const url = new URL(String(path || ""), window.location.href);
-        url.searchParams.set("session", token);
-        return url.toString();
-      } catch {
-        const rawPath = String(path || "");
-        const hashIndex = rawPath.indexOf("#");
-        const base = hashIndex >= 0 ? rawPath.slice(0, hashIndex) : rawPath;
-        const hash = hashIndex >= 0 ? rawPath.slice(hashIndex) : "";
-        const sep = base.includes("?") ? "&" : "?";
-        return `${base}${sep}session=${encodeURIComponent(token)}${hash}`;
-      }
-    }
-    return path;
+    if (sessionData && typeof sessionData === "object") persistSession(sessionData);
+    return String(path || "");
   }
 
   function clearUrlSearch() {
@@ -177,13 +238,30 @@
     window.history.replaceState({}, "", nextUrl);
   }
 
+  async function refreshSessionIfNeeded() {
+    const session = recoverSessionFromLocation({ persist: false });
+    if (!session) return null;
+    if (!session.legacyAuth) {
+      const normalized = normalizeSession({ ...session, legacyAuth: true });
+      if (!normalized) return session;
+      persistSession(normalized);
+      return normalized;
+    }
+    return session;
+  }
+
+  async function signOutSessionRemote() {
+    clearSession({ markLoggedOut: true });
+  }
+
   function requireSession(options) {
     const opts = options && typeof options === "object" ? options : {};
     const session = recoverSessionFromLocation({
-      persist: opts.persist !== false,
-      allowEmailParam: opts.allowEmailParam === true
+      persist: opts.persist !== false
     });
-    if (!session) {
+    const validSession = session && hasCloudAccess(session);
+    if (!validSession) {
+      clearSession({ markLoggedOut: false });
       if (opts.redirectPath !== false) {
         window.location.href = typeof opts.redirectPath === "string" ? opts.redirectPath : "index.html";
       }
@@ -201,6 +279,7 @@
     DAY_START_MINUTE,
     DAY_END_MINUTE,
     getPlayerId,
+    getPlayerChannelName,
     toDateKey,
     parseDateKey,
     addDaysToDateKey,
@@ -209,7 +288,15 @@
     decodeSessionToken,
     encodeSessionToken,
     isTokenRevoked,
+    isSessionExpired,
+    hasCloudAccess,
+    canAccessAdmin,
+    normalizeSession,
+    persistSession,
+    clearSession,
     recoverSessionFromLocation,
+    refreshSessionIfNeeded,
+    signOutSessionRemote,
     withSession,
     clearUrlSearch,
     requireSession

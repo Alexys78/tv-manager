@@ -10,6 +10,7 @@
   const cloudSyncApi = window.TVManagerCloudSync || null;
   const coreApi = window.TVManagerCore || null;
   const cloudConfigApi = window.TVManagerCloudConfig || null;
+  const SITE_VERSION = "0.1";
   let notifSyncWriteVersion = 0;
 
   function ensureSessionStillValid() {
@@ -23,10 +24,7 @@
   }
 
   function withCurrentSession(path) {
-    if (sessionUtils && typeof sessionUtils.withSession === "function") {
-      return sessionUtils.withSession(path, getSession());
-    }
-    return path;
+    return String(path || "");
   }
 
   function createMenuLink(config, className) {
@@ -61,9 +59,9 @@
     const status = state && state.status ? state.status : "idle";
     if (status === "synced") return { text: "Synchronisé", css: "sync-synced" };
     if (status === "pending") return { text: "En attente", css: "sync-pending" };
-    if (status === "syncing") return { text: "Sync...", css: "sync-syncing" };
+    if (status === "syncing") return { text: "Synchronisation...", css: "sync-syncing" };
     if (status === "error") return { text: "Erreur sync", css: "sync-error" };
-    return { text: "Sync off", css: "sync-off" };
+    return { text: "Synchronisation inactive", css: "sync-off" };
   }
 
   function renderSyncBadge(target) {
@@ -416,8 +414,19 @@
     const syncBadge = document.createElement("span");
     syncBadge.id = "syncStateBadge";
     syncBadge.className = "sync-state-badge sync-off";
-    syncBadge.textContent = "Sync off";
+    syncBadge.textContent = "Synchronisation inactive";
     renderSyncBadge(syncBadge);
+
+    const versionBtn = document.createElement("button");
+    versionBtn.type = "button";
+    versionBtn.id = "openVersionsBtn";
+    versionBtn.className = `menu-btn version-icon-btn ${activePage === "versions" ? "active" : ""}`.trim();
+    versionBtn.setAttribute("aria-label", `Version du site ${SITE_VERSION}`);
+    versionBtn.title = `Version actuelle: ${SITE_VERSION}`;
+    versionBtn.textContent = `v${SITE_VERSION}`;
+    versionBtn.addEventListener("click", () => {
+      window.location.href = withCurrentSession("versions.html");
+    });
 
     const notifications = createNotificationsMenu(getSession());
 
@@ -433,14 +442,18 @@
     logoutIcon.alt = "";
     logoutIcon.decoding = "async";
     logout.appendChild(logoutIcon);
-    logout.addEventListener("click", () => {
-      localStorage.setItem(LOGOUT_AT_KEY, new Date().toISOString());
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.removeItem(LAST_EMAIL_KEY);
+    logout.addEventListener("click", async () => {
+      if (sessionUtils && typeof sessionUtils.signOutSessionRemote === "function") {
+        await sessionUtils.signOutSessionRemote();
+      } else {
+        localStorage.setItem(LOGOUT_AT_KEY, new Date().toISOString());
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(LAST_EMAIL_KEY);
+      }
       window.location.replace("index.html");
     });
 
-    actions.append(syncBadge, notifications, logout);
+    actions.append(syncBadge, versionBtn, notifications, logout);
 
     topRow.append(brand, bank, actions);
 
@@ -457,6 +470,7 @@
     const contenusEntries = [
       { page: "planner", id: "openPlannerBtn", label: "Grille TV", path: "grille-tv.html" },
       { page: "studio", id: "openStudioBtn", label: "Studio TV", path: "studio.html" },
+      { page: "studio-productions", id: "openStudioProductionsBtn", label: "Productions en cours", path: "suivi-productions.html" },
       { page: "market", id: "openMarketBtn", label: "Marché des programmes", path: "marche-programmes.html" },
       { page: "owned", id: "openOwnedBtn", label: "Vos programmes", path: "vos-programmes.html" }
     ];
@@ -465,13 +479,18 @@
       { page: "personnel-recruitment", id: "openRecruitmentBtn", label: "Recrutement", path: "recrutement.html" }
     ];
 
-    menu.append(
+    const currentSession = getSession();
+    const canSeeAdmin = sessionUtils && typeof sessionUtils.canAccessAdmin === "function"
+      ? sessionUtils.canAccessAdmin(currentSession)
+      : false;
+    const menuNodes = [
       createMenuButton(dashboard, activePage),
       createDropdownMenu("Pilotage", pilotageEntries, activePage),
       createDropdownMenu("Contenus", contenusEntries, activePage),
-      createDropdownMenu("Personnels", personnelsEntries, activePage),
-      createMenuButton(admin, activePage)
-    );
+      createDropdownMenu("Personnels", personnelsEntries, activePage)
+    ];
+    if (canSeeAdmin) menuNodes.push(createMenuButton(admin, activePage));
+    menu.append(...menuNodes);
     wrapper.append(topRow, menu);
     return wrapper;
   }

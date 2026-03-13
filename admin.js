@@ -5,8 +5,6 @@
   const STUDIO_KEY_PREFIX = appKeys.STUDIO_KEY_PREFIX || "tv_manager_studio_";
   const STUDIO_SCHEDULE_KEY_PREFIX = appKeys.STUDIO_SCHEDULE_KEY_PREFIX || "tv_manager_studio_schedule_";
   const BANK_KEY_PREFIX = appKeys.BANK_KEY_PREFIX || "tv_manager_bank_";
-  const WEEK_GRID_KEY_PREFIX = appKeys.WEEK_GRID_KEY_PREFIX || "tv_manager_week_grid_";
-  const LEGACY_GRID_KEY_PREFIX = appKeys.LEGACY_GRID_KEY_PREFIX || "tv_manager_grid_";
   const DATE_GRID_KEY_PREFIX = appKeys.DATE_GRID_KEY_PREFIX || "tv_manager_date_grid_";
   const RESULTS_KEY_PREFIX = appKeys.RESULTS_KEY_PREFIX || "tv_manager_audience_results_";
   const PLAYER_REDIFF_STATS_KEY_PREFIX = appKeys.PLAYER_REDIFF_STATS_KEY_PREFIX || "tv_manager_player_rediff_stats_";
@@ -31,6 +29,10 @@
     ? sessionUtils.requireSession({ redirectPath: "index.html", persist: true, allowEmailParam: true, clearSearch: true })
     : null;
   if (!session) return;
+  if (!sessionUtils || typeof sessionUtils.canAccessAdmin !== "function" || !sessionUtils.canAccessAdmin(session)) {
+    window.location.replace("tableau-de-bord.html");
+    return;
+  }
 
   function setFeedback(message, type) {
     const feedback = document.getElementById("adminFeedback");
@@ -115,8 +117,6 @@
     if (!playerId) return;
     const fixedKeys = [
       `${BANK_KEY_PREFIX}${playerId}`,
-      `${WEEK_GRID_KEY_PREFIX}${playerId}`,
-      `${LEGACY_GRID_KEY_PREFIX}${playerId}`,
       `${DATE_GRID_KEY_PREFIX}${playerId}`,
       `${STUDIO_KEY_PREFIX}${playerId}`,
       `${STUDIO_SCHEDULE_KEY_PREFIX}${playerId}`,
@@ -159,6 +159,7 @@
 
   function readCloudConfig() {
     const fixedStateTable = "tv_manager_state_records";
+    const fixedAccountsTable = "tv_manager_accounts";
     if (cloudConfigApi && typeof cloudConfigApi.read === "function") {
       const cfg = cloudConfigApi.read();
       if (cfg && cfg.url && cfg.anonKey) {
@@ -166,7 +167,7 @@
           url: String(cfg.url).trim().replace(/\/+$/, ""),
           anonKey: String(cfg.anonKey).trim(),
           table: fixedStateTable,
-          accountsTable: String(cfg.accountsTable || "tv_manager_accounts").trim()
+          accountsTable: fixedAccountsTable
         };
       }
     }
@@ -174,6 +175,9 @@
   }
 
   function cloudHeaders(config) {
+    if (!session || !session.email) {
+      throw new Error("Session invalide: reconnecte-toi.");
+    }
     return {
       apikey: config.anonKey,
       Authorization: `Bearer ${config.anonKey}`,
@@ -215,7 +219,9 @@
   }
 
   async function deleteCloudAccountByEmail(config, email) {
-    const url = `${config.url}/rest/v1/${encodeURIComponent(config.accountsTable)}?email=eq.${encodeURIComponent(email)}`;
+    const safeEmail = String(email || "").trim().toLowerCase();
+    if (!safeEmail) return;
+    const url = `${config.url}/rest/v1/${encodeURIComponent(config.accountsTable)}?email=eq.${encodeURIComponent(safeEmail)}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers: cloudHeaders(config)
@@ -229,7 +235,7 @@
   async function deleteAccountFromCloud() {
     const config = readCloudConfig();
     if (!config) {
-      throw new Error("Configuration cloud manquante. Configure d'abord Supabase dans Admin.");
+      throw new Error("Configuration cloud manquante. Configure d'abord le cloud dans Admin.");
     }
     const ids = getPlayerIdsForCleanup().filter(Boolean);
     for (let i = 0; i < ids.length; i += 1) {
@@ -263,7 +269,7 @@
       status.textContent = "Aucun calcul de veille enregistré.";
       return;
     }
-    status.textContent = `Dernier calcul veille: ${formatIsoDate(yesterday.computedAt)} (${yesterday.dayKey})`;
+    status.textContent = `Dernier calcul de la veille: ${formatIsoDate(yesterday.computedAt)} (${yesterday.dayKey})`;
   }
 
   function refreshFinanceStatus() {
@@ -275,7 +281,7 @@
     }
     const yesterday = financeStore.getResultByOffset(session, -1);
     if (!yesterday) {
-      status.textContent = "Aucun résultat financier de veille.";
+      status.textContent = "Aucun résultat financier de la veille.";
       return;
     }
     status.textContent = `Dernier résultat: ${formatIsoDate(yesterday.computedAt)} (${yesterday.dateKey})`;
@@ -472,10 +478,24 @@
   function renderRecruitmentRegenerateButtons() {
     const wrap = document.getElementById("recruitmentRegenerateButtons");
     if (!wrap) return;
-    const items = [
+    let items = [
       { id: "presenters", label: "Renouveler Présentateurs", successLabel: "Casting présentateurs renouvelé" },
       { id: "journalists", label: "Renouveler Journalistes", successLabel: "Casting journalistes renouvelé" }
     ];
+    if (presenterEngine && typeof presenterEngine.listRolesForCurrentSession === "function") {
+      const roles = presenterEngine.listRolesForCurrentSession();
+      if (Array.isArray(roles) && roles.length > 0) {
+        items = roles.map((role) => {
+          const id = String(role && role.id ? role.id : "").trim();
+          const label = String(role && role.label ? role.label : id);
+          return {
+            id,
+            label: `Renouveler ${label}`,
+            successLabel: `Casting ${label.toLowerCase()} renouvelé`
+          };
+        }).filter((item) => item.id);
+      }
+    }
     const buttons = items.map((item) => createRecruitmentRegenerateButton(item));
     wrap.replaceChildren(...buttons);
   }
@@ -580,7 +600,11 @@
         if (localStorage.getItem(LAST_EMAIL_KEY) === session.email) {
           localStorage.removeItem(LAST_EMAIL_KEY);
         }
-        localStorage.removeItem(SESSION_KEY);
+        if (sessionUtils && typeof sessionUtils.signOutSessionRemote === "function") {
+          await sessionUtils.signOutSessionRemote();
+        } else {
+          localStorage.removeItem(SESSION_KEY);
+        }
         window.location.href = "index.html";
       } catch (error) {
         const details = error && error.message ? error.message : "Impossible de supprimer le compte.";

@@ -1,4 +1,4 @@
-# TV Manager - Setup Cloud (unique base)
+# TV Manager - Setup Cloud (tv_manager_accounts + state_records)
 
 ## 1) Créer le projet Supabase
 - Ouvre [https://supabase.com](https://supabase.com)
@@ -7,7 +7,58 @@
   - `Project URL`
   - `anon public key`
 
-## 2) Créer la table de sauvegarde (unique)
+## 2) Créer la table comptes (auth applicative)
+
+```sql
+create table if not exists public.tv_manager_accounts (
+  email text primary key,
+  username text not null,
+  password_hash text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists tv_manager_accounts_username_unique_ci
+  on public.tv_manager_accounts (lower(username));
+
+alter table public.tv_manager_accounts enable row level security;
+
+drop policy if exists "tv_manager_accounts_select" on public.tv_manager_accounts;
+drop policy if exists "tv_manager_accounts_insert" on public.tv_manager_accounts;
+drop policy if exists "tv_manager_accounts_update" on public.tv_manager_accounts;
+drop policy if exists "tv_manager_accounts_delete" on public.tv_manager_accounts;
+
+create policy "tv_manager_accounts_select"
+on public.tv_manager_accounts
+for select
+to anon
+using (true);
+
+create policy "tv_manager_accounts_insert"
+on public.tv_manager_accounts
+for insert
+to anon
+with check (true);
+
+create policy "tv_manager_accounts_update"
+on public.tv_manager_accounts
+for update
+to anon
+using (true)
+with check (true);
+
+create policy "tv_manager_accounts_delete"
+on public.tv_manager_accounts
+for delete
+to anon
+using (true);
+```
+
+Note:
+- Le mot de passe est hashé côté client (`PBKDF2-SHA256`) puis stocké dans `password_hash`.
+- L’inscription est limitée aux emails admin déclarés dans la config.
+
+## 3) Créer la table de sauvegarde
 
 ```sql
 create table if not exists public.tv_manager_state_records (
@@ -23,30 +74,35 @@ create index if not exists idx_tv_manager_state_records_player
   on public.tv_manager_state_records (player_id, sync_token);
 
 alter table public.tv_manager_state_records enable row level security;
+```
 
+## 4) Appliquer des policies RLS (mode simple table-only)
+
+```sql
 drop policy if exists "tv_manager_state_records_select" on public.tv_manager_state_records;
+drop policy if exists "tv_manager_state_records_insert" on public.tv_manager_state_records;
+drop policy if exists "tv_manager_state_records_update" on public.tv_manager_state_records;
+drop policy if exists "tv_manager_state_records_delete" on public.tv_manager_state_records;
+
 create policy "tv_manager_state_records_select"
 on public.tv_manager_state_records
 for select
 to anon
 using (true);
 
-drop policy if exists "tv_manager_state_records_insert" on public.tv_manager_state_records;
 create policy "tv_manager_state_records_insert"
 on public.tv_manager_state_records
 for insert
 to anon
-with check (true);
+with check (payload is not null);
 
-drop policy if exists "tv_manager_state_records_update" on public.tv_manager_state_records;
 create policy "tv_manager_state_records_update"
 on public.tv_manager_state_records
 for update
 to anon
 using (true)
-with check (true);
+with check (payload is not null);
 
-drop policy if exists "tv_manager_state_records_delete" on public.tv_manager_state_records;
 create policy "tv_manager_state_records_delete"
 on public.tv_manager_state_records
 for delete
@@ -54,67 +110,31 @@ to anon
 using (true);
 ```
 
-## 3) Créer la table comptes joueurs
+## 5) Configurer le jeu
+- Mets la config dans `/Users/alexisaubard/Library/CloudStorage/OneDrive-Personnel/Mes documents/Programmation/Codex/cloud-defaults.js`
+  - `url`
+  - `anonKey`
+  - `table: "tv_manager_state_records"`
+  - `adminEmails`: liste des emails autorisés à ouvrir la page Admin
 
-```sql
-create table if not exists public.tv_manager_accounts (
-  email text primary key,
-  username text not null,
-  password_hash text not null,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+Exemple:
 
-create index if not exists idx_tv_manager_accounts_username
-  on public.tv_manager_accounts (username);
-
-alter table public.tv_manager_accounts enable row level security;
-
-drop policy if exists "tv_manager_accounts_select" on public.tv_manager_accounts;
-create policy "tv_manager_accounts_select"
-on public.tv_manager_accounts
-for select
-to anon
-using (true);
-
-drop policy if exists "tv_manager_accounts_insert" on public.tv_manager_accounts;
-create policy "tv_manager_accounts_insert"
-on public.tv_manager_accounts
-for insert
-to anon
-with check (true);
-
-drop policy if exists "tv_manager_accounts_update" on public.tv_manager_accounts;
-create policy "tv_manager_accounts_update"
-on public.tv_manager_accounts
-for update
-to anon
-using (true)
-with check (true);
-
-drop policy if exists "tv_manager_accounts_delete" on public.tv_manager_accounts;
-create policy "tv_manager_accounts_delete"
-on public.tv_manager_accounts
-for delete
-to anon
-using (true);
+```js
+window.TV_MANAGER_CLOUD_DEFAULTS = {
+  url: "https://YOUR_PROJECT.supabase.co",
+  anonKey: "YOUR_SUPABASE_ANON_KEY",
+  table: "tv_manager_state_records",
+  syncToken: "default",
+  adminEmails: ["ton-email@exemple.com"]
+};
 ```
 
-## 4) Configurer le jeu
-- Va sur `Admin` > `Sync cloud (Supabase)`
-- Renseigne:
-  - URL Supabase
-  - Clé anon
-  - Token de sync (même token sur tous les PC d’un même profil)
-  - Table: `tv_manager_state_records`
-- Clique `Enregistrer + connecter`
-
-Option recommandée (prod): configure directement `/Users/alexisaubard/Library/CloudStorage/OneDrive-Personnel/Mes documents/Programmation/Codex/cloud-defaults.js` pour éviter toute saisie manuelle.
-
-## 5) Vérifier
-- PC A: joue puis clique `Envoyer vers cloud`
-- PC B: même compte + même token, clique `Récupérer du cloud`
+## 6) Vérifier
+- Crée un compte depuis `register.html` avec un email autorisé (adminEmails).
+- Connecte-toi avec cet email/mot de passe.
+- Joue sur PC A, recharge sur PC B avec le même compte: les données doivent être identiques.
 
 ## Notes
-- Le jeu est maintenant branché sur **une seule base de sauvegarde**: `tv_manager_state_records`.
-- `tv_manager_saves` n’est plus nécessaire.
+- Le jeu utilise:
+  - `tv_manager_accounts` pour la connexion
+  - `tv_manager_state_records` pour toutes les sauvegardes

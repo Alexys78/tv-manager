@@ -112,7 +112,9 @@
       session,
       adapter: new adapters.SupabaseNamespaceAdapter({
         ...opts,
-        playerId
+        playerId,
+        accessToken: session && session.accessToken ? session.accessToken : "",
+        legacyAuth: Boolean(session && session.legacyAuth)
       })
     });
   }

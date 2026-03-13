@@ -12,7 +12,15 @@
     owned_details: {},
     studio_state: {},
     studio_schedule: [],
-    presenters: { hired: [], market: [], revision: 0 },
+    studio_productions: [],
+    presenters: {
+      roles: {
+        presenters: { hired: [], market: [], revision: 0, lastRefreshAnchor: "" },
+        journalists: { hired: [], market: [], revision: 0, lastRefreshAnchor: "" },
+        directors: { hired: [], market: [], revision: 0, lastRefreshAnchor: "" },
+        producers: { hired: [], market: [], revision: 0, lastRefreshAnchor: "" }
+      }
+    },
     ad_settings: {},
     ad_slot_plan: {},
     rediff_stats: {},
@@ -24,8 +32,16 @@
   });
 
   function cloneDefault(value) {
-    if (Array.isArray(value)) return value.slice();
-    if (value && typeof value === "object") return { ...value };
+    if (Array.isArray(value) || (value && typeof value === "object")) {
+      if (typeof structuredClone === "function") {
+        return structuredClone(value);
+      }
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch {
+        return Array.isArray(value) ? value.slice() : { ...value };
+      }
+    }
     return value;
   }
 

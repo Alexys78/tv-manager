@@ -296,6 +296,9 @@
   }
 
   if (engine) {
+    const playerChannelName = sessionUtils && typeof sessionUtils.getPlayerChannelName === "function"
+      ? sessionUtils.getPlayerChannelName(session)
+      : (session.username || "Ta chaîne");
     const todayKey = getTodayKey();
     const todayDateKey = getTodayDateKey();
     const publishedToday = isGridPublished(todayDateKey);
@@ -303,7 +306,7 @@
     const todayStatuses = publishedToday ? getStatusesForDateEntries(todayDateKey, todayDayEntries) : [];
     const programSimulation = engine.simulateDay(
       todayKey,
-      session.username ? `${session.username} TV` : "Ta chaîne",
+      playerChannelName,
       todayDayEntries
     );
     let rankingSimulation = null;
@@ -316,7 +319,7 @@
       const yesterdayKey = getDayKeyByOffset(-1);
       rankingSimulation = engine.simulateDay(
         yesterdayKey,
-        session.username ? `${session.username} TV` : "Ta chaîne",
+        playerChannelName,
         playerWeek[yesterdayKey]
       );
       rankingDayKey = yesterdayKey;

@@ -16,7 +16,12 @@
     pendingFireRole: "",
     pendingFireId: ""
   };
-  const STAR_FILTER_VALUES = [0.5, 1, 1.5, 2];
+
+  function getRoleStarFilterValues(roleId) {
+    const role = String(roleId || "");
+    if (role === "directors" || role === "producers") return [0, 0.5];
+    return [0, 0.5, 1];
+  }
 
   function formatEuro(value) {
     return sessionUtils.formatEuro(Number(value) || 0);
@@ -36,7 +41,9 @@
     }
     return [
       { id: "presenters", label: "Présentateurs", singular: "Présentateur", singularLower: "présentateur" },
-      { id: "journalists", label: "Journalistes", singular: "Journaliste", singularLower: "journaliste" }
+      { id: "journalists", label: "Journalistes", singular: "Journaliste", singularLower: "journaliste" },
+      { id: "directors", label: "Réalisateurs", singular: "Réalisateur", singularLower: "réalisateur" },
+      { id: "producers", label: "Producteurs", singular: "Producteur", singularLower: "producteur" }
     ];
   }
 
@@ -105,15 +112,17 @@
     return [];
   }
 
-  function formatStarBonusLabel(value) {
-    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
-    const text = Number.isInteger(safe) ? String(safe) : String(safe).replace(".", ",");
-    return `+${text}★`;
+  function normalizeStarBonusValue(value, roleId) {
+    const role = String(roleId || state.role || "");
+    const max = (role === "directors" || role === "producers") ? 0.5 : 1;
+    const safe = Math.max(0, Math.min(max, Number(value) || 0));
+    return Math.round(safe * 2) / 2;
   }
 
-  function normalizeStarBonusValue(value) {
-    const safe = Math.max(0.5, Math.min(2, Number(value) || 0.5));
-    return Math.round(safe * 2) / 2;
+  function formatStarBonusLabel(value, roleId) {
+    const safe = normalizeStarBonusValue(value, roleId);
+    const text = Number.isInteger(safe) ? String(safe) : String(safe).replace(".", ",");
+    return `+${text}★`;
   }
 
   function compareRows(a, b) {
@@ -398,7 +407,7 @@
     });
     starsChips.appendChild(starsAllChip);
 
-    STAR_FILTER_VALUES.forEach((starValue) => {
+    getRoleStarFilterValues(state.role).forEach((starValue) => {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = `filter-chip ${Number(state.stars) === starValue ? "active" : ""}`.trim();
@@ -472,7 +481,7 @@
         notorietyTd.textContent = String(Math.max(0, Number(item.notoriety) || 0));
 
         const impactTd = document.createElement("td");
-        impactTd.textContent = formatStarBonusLabel(item.starBonus);
+        impactTd.textContent = formatStarBonusLabel(item.starBonus, state.role);
 
         const salaryTd = document.createElement("td");
         salaryTd.textContent = `${formatEuro(item.salaryMonthly || 0)} / mois`;
@@ -507,7 +516,7 @@
         const parsed = parseSpecialty(item && item.specialty ? item.specialty : "", state.role);
         if (genre !== "all" && parsed.genre !== genre) return false;
         if (subgenre !== "all" && parsed.subgenre !== subgenre) return false;
-        if (stars !== "all" && normalizeStarBonusValue(item && item.starBonus) !== normalizeStarBonusValue(stars)) return false;
+        if (stars !== "all" && normalizeStarBonusValue(item && item.starBonus, state.role) !== normalizeStarBonusValue(stars, state.role)) return false;
         return true;
       })
       .sort(compareRows);
