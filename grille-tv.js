@@ -722,6 +722,79 @@
     });
   }
 
+  function mergeCopiedEntriesWithTargetFixed(copiedEntries, targetFixedEntries) {
+    const queue = (Array.isArray(copiedEntries) ? copiedEntries : [])
+      .map((entry) => normalizeEntry(entry))
+      .filter((entry) => entry.title && !isFixedEntry(entry));
+    const fixed = (Array.isArray(targetFixedEntries) ? targetFixedEntries : [])
+      .map((entry) => normalizeEntry(entry))
+      .filter((entry) => entry.title && isFixedEntry(entry))
+      .sort((a, b) => Number(a.fixedStartMinute || 0) - Number(b.fixedStartMinute || 0));
+
+    const result = [];
+    let cursor = SEGMENT.start;
+
+    fixed.forEach((lockedEntry) => {
+      const lockStart = normalizeFixedStartMinute(lockedEntry.fixedStartMinute);
+      if (!Number.isFinite(lockStart)) return;
+
+      while (queue.length > 0) {
+        const candidate = queue[0];
+        const duration = getEntryDuration(candidate);
+        if (!duration) {
+          queue.shift();
+          continue;
+        }
+        if ((cursor + duration) > lockStart) break;
+        result.push(queue.shift());
+        cursor += duration;
+        if (cursor >= SEGMENT.end) break;
+      }
+
+      if (cursor < lockStart) cursor = lockStart;
+      if (cursor >= SEGMENT.end) return;
+
+      result.push(lockedEntry);
+      cursor += getEntryDuration(lockedEntry);
+      if (cursor > SEGMENT.end) cursor = SEGMENT.end;
+    });
+
+    while (queue.length > 0 && cursor < SEGMENT.end) {
+      const candidate = queue.shift();
+      const duration = getEntryDuration(candidate);
+      if (!candidate || !candidate.title || !duration) continue;
+      result.push(candidate);
+      cursor += duration;
+    }
+
+    return result;
+  }
+
+  function fixedEntryKey(entry) {
+    const normalized = normalizeEntry(entry);
+    return [
+      String(normalized.studioScheduleId || ""),
+      String(normalized.title || ""),
+      String(normalized.categoryId || ""),
+      String(normalizeFixedStartMinute(normalized.fixedStartMinute))
+    ].join("::");
+  }
+
+  function preservesTargetFixedEntries(targetFixedEntries, mergedEntries) {
+    const targetKeys = (Array.isArray(targetFixedEntries) ? targetFixedEntries : [])
+      .map((entry) => normalizeEntry(entry))
+      .filter((entry) => entry.title && isFixedEntry(entry))
+      .map((entry) => fixedEntryKey(entry));
+    if (targetKeys.length === 0) return true;
+    const mergedSet = new Set(
+      (Array.isArray(mergedEntries) ? mergedEntries : [])
+        .map((entry) => normalizeEntry(entry))
+        .filter((entry) => entry.title && isFixedEntry(entry))
+        .map((entry) => fixedEntryKey(entry))
+    );
+    return targetKeys.every((key) => mergedSet.has(key));
+  }
+
   function getFirstUndiffusedEpisode(categoryId, title, omitDateKey, omitIndex, targetDateKey) {
     const meta = getEpisodicMeta(categoryId, title, targetDateKey) || { seasons: 1, episodesPerSeason: 1 };
     const used = collectUsedEpisodes(categoryId, title, omitDateKey, omitIndex);
@@ -1790,10 +1863,21 @@
       }
 
       const source = normalizeDay(state.dateGrid[state.selectedDateKey]).day;
-      const copiedDay = buildCopiedDayWithFreshEpisodes(source, targetDateKey);
-      state.dateGrid[targetDateKey] = { day: copiedDay };
+      const sourceEditable = source
+        .map((entry) => normalizeEntry(entry))
+        .filter((entry) => entry.title && !isFixedEntry(entry));
+      const copiedEditable = buildCopiedDayWithFreshEpisodes(sourceEditable, targetDateKey);
+      const targetFixed = normalizeDay(state.dateGrid[targetDateKey]).day
+        .map((entry) => normalizeEntry(entry))
+        .filter((entry) => entry.title && isFixedEntry(entry));
+      const mergedDay = mergeCopiedEntriesWithTargetFixed(copiedEditable, targetFixed);
+      if (!preservesTargetFixedEntries(targetFixed, mergedDay)) {
+        setPlannerFeedback("Copie annulée: protection des programmes studio verrouillés.", "error");
+        return;
+      }
+      state.dateGrid[targetDateKey] = { day: mergedDay };
       saveDateGrid();
-      setPlannerFeedback(`Le ${formatDateLong(fromDateKey(state.selectedDateKey))} a été copié vers ${formatDateLong(targetItem.date)}.`, "success");
+      setPlannerFeedback(`Le ${formatDateLong(fromDateKey(state.selectedDateKey))} a été copié vers ${formatDateLong(targetItem.date)} (programmes studio verrouillés conservés).`, "success");
     });
   }
 

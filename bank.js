@@ -1,5 +1,5 @@
 (function bankInit() {
-  const DEFAULT_BALANCE = 500000;
+  const DEFAULT_BALANCE = 2000000;
   const sessionUtils = window.SessionUtils;
   const appKeys = (sessionUtils && sessionUtils.APP_KEYS) || {};
   const BANK_KEY_PREFIX = appKeys.BANK_KEY_PREFIX || "tv_manager_bank_";

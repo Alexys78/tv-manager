@@ -10,7 +10,7 @@
   const cloudSyncApi = window.TVManagerCloudSync || null;
   const coreApi = window.TVManagerCore || null;
   const cloudConfigApi = window.TVManagerCloudConfig || null;
-  const SITE_VERSION = "0.1";
+  const SITE_VERSION = "0.1.0.1";
   let notifSyncWriteVersion = 0;
 
   function ensureSessionStillValid() {
@@ -148,13 +148,13 @@
   }
 
   function readBankBalance(session) {
-    if (!session) return 500000;
+    if (!session) return 2000000;
     const playerId = sessionUtils && typeof sessionUtils.getPlayerId === "function"
       ? sessionUtils.getPlayerId(session)
       : (session.email || session.username || "player");
     const raw = localStorage.getItem(`${BANK_KEY_PREFIX}${playerId}`);
     const value = Number(raw);
-    return Number.isFinite(value) ? value : 500000;
+    return Number.isFinite(value) ? value : 2000000;
   }
 
   function buildNotifications(session) {
@@ -406,7 +406,7 @@
     const bank = document.createElement("span");
     bank.className = "bank-badge";
     bank.setAttribute("data-bank-balance", "");
-    bank.textContent = "Compte: 500 000 €";
+    bank.textContent = "Compte: 2 000 000 €";
 
     const actions = document.createElement("div");
     actions.className = "header-actions";

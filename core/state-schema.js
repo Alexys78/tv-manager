@@ -2,7 +2,7 @@
   const VERSION = 1;
 
   const DEFAULTS = Object.freeze({
-    bank_balance: 500000,
+    bank_balance: 2000000,
     date_grid: {},
     grid_publication: {},
     audience_results: {},
