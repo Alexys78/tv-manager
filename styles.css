@@ -2812,33 +2812,58 @@ a {
   color: #9ff0cd;
 }
 
-.studio-planning-event:is(
-  .category-information,
-  .category-divertissement,
-  .category-films,
-  .category-series,
-  .category-magazines,
-  .category-jeunesse,
-  .category-documentaires,
-  .category-realite,
-  .category-culture
-) {
-  border-color: rgba(var(--category-rgb), 0.52);
-  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.2), rgba(var(--category-rgb), 0.08));
+.studio-planning-event[data-category-id="information"] {
+  --category-color: #4ac0ff;
+  --category-rgb: 74, 192, 255;
 }
 
-.studio-planning-event:is(
-  .category-information,
-  .category-divertissement,
-  .category-films,
-  .category-series,
-  .category-magazines,
-  .category-jeunesse,
-  .category-documentaires,
-  .category-realite,
-  .category-culture
-) .studio-planning-event-hour {
-  color: var(--category-color);
+.studio-planning-event[data-category-id="divertissement"] {
+  --category-color: #f6c453;
+  --category-rgb: 246, 196, 83;
+}
+
+.studio-planning-event[data-category-id="films"] {
+  --category-color: #e879f9;
+  --category-rgb: 232, 121, 249;
+}
+
+.studio-planning-event[data-category-id="series"] {
+  --category-color: #a78bfa;
+  --category-rgb: 167, 139, 250;
+}
+
+.studio-planning-event[data-category-id="magazines"] {
+  --category-color: #fb7185;
+  --category-rgb: 251, 113, 133;
+}
+
+.studio-planning-event[data-category-id="jeunesse"] {
+  --category-color: #f97316;
+  --category-rgb: 249, 115, 22;
+}
+
+.studio-planning-event[data-category-id="documentaires"] {
+  --category-color: #22d3ee;
+  --category-rgb: 34, 211, 238;
+}
+
+.studio-planning-event[data-category-id="realite"] {
+  --category-color: #f43f5e;
+  --category-rgb: 244, 63, 94;
+}
+
+.studio-planning-event[data-category-id="culture"] {
+  --category-color: #60a5fa;
+  --category-rgb: 96, 165, 250;
+}
+
+.studio-planning-event[data-category-id] {
+  border-color: rgba(var(--category-rgb), 0.56) !important;
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.24), rgba(var(--category-rgb), 0.09)) !important;
+}
+
+.studio-planning-event[data-category-id] .studio-planning-event-hour {
+  color: var(--category-color) !important;
 }
 
 .studio-planning-event.production-shoot {
