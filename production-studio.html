@@ -102,8 +102,11 @@
                   <option value="2">2 passages</option>
                 </select>
 
-                <label id="productionEpisodeCountLabel" class="hidden" for="productionEpisodeCountSelect">Nombre d'épisodes</label>
-                <div id="productionEpisodeCountButtons" class="studio-chip-row hidden"></div>
+                <label id="productionEpisodeCountLabel" class="hidden" for="productionEpisodeCountRange">Nombre d'épisodes</label>
+                <div id="productionEpisodeCountButtons" class="studio-range-field hidden">
+                  <input id="productionEpisodeCountRange" type="range" min="1" max="52" step="1" value="1" />
+                  <span id="productionEpisodeCountValue" class="studio-range-value">1 épisode</span>
+                </div>
                 <select id="productionEpisodeCountSelect" class="hidden"></select>
 
                 <label id="productionShootDaysLabel" class="hidden">Jour de tournage</label>

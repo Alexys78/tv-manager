@@ -808,9 +808,30 @@
     return null;
   }
 
+  function getFallbackRediffusionEpisode(categoryId, title, targetDateKey) {
+    const meta = getEpisodicMeta(categoryId, title, targetDateKey) || { seasons: 1, episodesPerSeason: 1 };
+    if (isEpisodeAvailable(meta, 1, 1)) {
+      return { season: 1, episode: 1 };
+    }
+    for (let season = 1; season <= meta.seasons; season += 1) {
+      for (let episode = 1; episode <= meta.episodesPerSeason; episode += 1) {
+        if (isEpisodeAvailable(meta, season, episode)) {
+          return { season, episode };
+        }
+      }
+    }
+    return null;
+  }
+
   function createEntryFromPayload(payload, indexToReplace) {
     if (isEpisodicCategory(payload.categoryId)) {
-      const next = getFirstUndiffusedEpisode(payload.categoryId, payload.title, state.selectedDateKey, indexToReplace, state.selectedDateKey);
+      const next = getFirstUndiffusedEpisode(
+        payload.categoryId,
+        payload.title,
+        state.selectedDateKey,
+        indexToReplace,
+        state.selectedDateKey
+      ) || getFallbackRediffusionEpisode(payload.categoryId, payload.title, state.selectedDateKey);
       if (!next) return null;
       return normalizeEntry({
         title: payload.title,

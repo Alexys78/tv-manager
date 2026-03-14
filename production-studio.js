@@ -142,7 +142,9 @@
     medium: { id: "medium", label: "Moyen", setupMultiplier: 1, runMultiplier: 1, starsBonus: 0 },
     high: { id: "high", label: "Élevé", setupMultiplier: 1.22, runMultiplier: 1.18, starsBonus: 0.5 }
   });
-  const MAGAZINE_EPISODE_COUNT_OPTIONS = [1, 2, 3, 4, 5, 6, 8, 10, 12];
+  const MAGAZINE_EPISODE_COUNT_MIN = 1;
+  const MAGAZINE_EPISODE_COUNT_MAX = 52;
+  const MAGAZINE_EPISODE_COUNT_DEFAULT = 1;
   const WEEKLY_MAX_WORK_MINUTES = 39 * 60;
   const OFF_AIR_MINUTES_BY_DURATION = Object.freeze({
     5: 25,
@@ -994,6 +996,8 @@
   const budgetButtons = document.getElementById("productionBudgetButtons");
   const episodeCountSelect = document.getElementById("productionEpisodeCountSelect");
   const episodeCountButtons = document.getElementById("productionEpisodeCountButtons");
+  const episodeCountRange = document.getElementById("productionEpisodeCountRange");
+  const episodeCountValue = document.getElementById("productionEpisodeCountValue");
   const shootDaysWrap = document.getElementById("productionShootDaysWrap");
   const shootTimesWrap = document.getElementById("productionShootTimesWrap");
   const presentersCountSelect = document.getElementById("productionPresentersCountSelect");
@@ -1026,7 +1030,7 @@
     !form || !studioSelect || !modeSelect || !modeButtons || !typeSelect || !typeButtons || !subtypeSelect || !subtypeButtons || !durationSelect || !durationButtons
     || !recurrenceModeSelect || !recurrenceButtons || !nameInput || !dateInput || !recurringStartInput
     || !recurringStartLabel || !recurringDaysWrap || !timeInput || !shootStartInput || !startLabel || !runsSelect || !runsButtons || !secondStartInput || !secondShootStartInput
-    || !ageRatingSelect || !ageRatingButtons || !budgetSelect || !budgetButtons || !episodeCountSelect || !episodeCountButtons || !shootDaysWrap || !shootTimesWrap
+    || !ageRatingSelect || !ageRatingButtons || !budgetSelect || !budgetButtons || !episodeCountSelect || !episodeCountButtons || !episodeCountRange || !episodeCountValue || !shootDaysWrap || !shootTimesWrap
     || !presentersCountSelect || !presentersCountButtons || !guestsCountSelect
     || !guestsCountButtons || !presentersWrap || !directorSelect || !producerSelect || !setupCostPreview || !perRunCostPreview || !starsPreview
     || !peoplePreview || !singleDateLabel || !recurringDaysLabel || !ageRatingLabel || !budgetLabel || !runsLabel || !episodeCountLabel || !shootDaysLabel || !shootTimesLabel
@@ -1255,32 +1259,27 @@
   }
 
   function renderEpisodeCountButtons() {
+    const options = [];
+    for (let value = MAGAZINE_EPISODE_COUNT_MIN; value <= MAGAZINE_EPISODE_COUNT_MAX; value += 1) {
+      options.push(value);
+    }
     episodeCountSelect.replaceChildren(
-      ...MAGAZINE_EPISODE_COUNT_OPTIONS.map((value) => {
+      ...options.map((value) => {
         const option = document.createElement("option");
         option.value = String(value);
         option.textContent = `${value} épisodes`;
         return option;
       })
     );
-    if (!MAGAZINE_EPISODE_COUNT_OPTIONS.includes(Number(episodeCountSelect.value))) {
-      episodeCountSelect.value = String(MAGAZINE_EPISODE_COUNT_OPTIONS[0]);
-    }
-    const buttons = MAGAZINE_EPISODE_COUNT_OPTIONS.map((value) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "filter-chip";
-      button.dataset.value = String(value);
-      button.textContent = `${value}`;
-      button.classList.toggle("active", Number(episodeCountSelect.value) === value);
-      button.addEventListener("click", () => {
-        episodeCountSelect.value = String(value);
-        setActiveChip(episodeCountButtons, String(value));
-        refreshSimulation();
-      });
-      return button;
-    });
-    episodeCountButtons.replaceChildren(...buttons);
+    let current = Math.floor(Number(episodeCountSelect.value) || MAGAZINE_EPISODE_COUNT_DEFAULT);
+    if (!Number.isFinite(current)) current = MAGAZINE_EPISODE_COUNT_DEFAULT;
+    current = Math.max(MAGAZINE_EPISODE_COUNT_MIN, Math.min(MAGAZINE_EPISODE_COUNT_MAX, current));
+    episodeCountSelect.value = String(current);
+    episodeCountRange.min = String(MAGAZINE_EPISODE_COUNT_MIN);
+    episodeCountRange.max = String(MAGAZINE_EPISODE_COUNT_MAX);
+    episodeCountRange.step = "1";
+    episodeCountRange.value = String(current);
+    episodeCountValue.textContent = `${current} épisode${current > 1 ? "s" : ""}`;
   }
 
   function renderMagazineShootDaysButtons() {
@@ -1840,9 +1839,9 @@
     ageRatingSelect.value = "TP";
     budgetSelect.value = "medium";
     recurrenceModeSelect.value = "single";
-    if (MAGAZINE_EPISODE_COUNT_OPTIONS.length > 0) {
-      episodeCountSelect.value = String(MAGAZINE_EPISODE_COUNT_OPTIONS[0]);
-    }
+    episodeCountSelect.value = String(MAGAZINE_EPISODE_COUNT_DEFAULT);
+    episodeCountRange.value = String(MAGAZINE_EPISODE_COUNT_DEFAULT);
+    episodeCountValue.textContent = `${MAGAZINE_EPISODE_COUNT_DEFAULT} épisode`;
     recurringDays.clear();
     magazineShootDays.clear();
     renderRecurringDaysButtons();
@@ -1898,6 +1897,26 @@
     if (!button) return;
     budgetSelect.value = normalizeBudget(button.dataset.value || "medium");
     setActiveChip(budgetButtons, budgetSelect.value);
+    refreshSimulation();
+  });
+  episodeCountRange.addEventListener("input", () => {
+    const value = Math.max(
+      MAGAZINE_EPISODE_COUNT_MIN,
+      Math.min(MAGAZINE_EPISODE_COUNT_MAX, Math.floor(Number(episodeCountRange.value) || MAGAZINE_EPISODE_COUNT_DEFAULT))
+    );
+    episodeCountSelect.value = String(value);
+    episodeCountRange.value = String(value);
+    episodeCountValue.textContent = `${value} épisode${value > 1 ? "s" : ""}`;
+    refreshSimulation();
+  });
+  episodeCountSelect.addEventListener("change", () => {
+    const value = Math.max(
+      MAGAZINE_EPISODE_COUNT_MIN,
+      Math.min(MAGAZINE_EPISODE_COUNT_MAX, Math.floor(Number(episodeCountSelect.value) || MAGAZINE_EPISODE_COUNT_DEFAULT))
+    );
+    episodeCountSelect.value = String(value);
+    episodeCountRange.value = String(value);
+    episodeCountValue.textContent = `${value} épisode${value > 1 ? "s" : ""}`;
     refreshSimulation();
   });
   shootTimesWrap.addEventListener("change", refreshSimulation);
