@@ -47,7 +47,11 @@
   }
 
   function setBalance(session, amount) {
-    const next = Math.max(0, Math.round(Number(amount) || 0));
+    const numeric = Number(amount);
+    if (!Number.isFinite(numeric)) {
+      return getBalance(session);
+    }
+    const next = Math.max(0, Math.round(numeric));
     localStorage.setItem(keyForSession(session), String(next));
     mirrorBankToStateRecords(next);
     scheduleCriticalCloudPush();
@@ -68,7 +72,8 @@
   }
 
   function mirrorBankToStateRecords(balanceValue) {
-    pendingMirrorBalance = Number(balanceValue) || DEFAULT_BALANCE;
+    const numeric = Number(balanceValue);
+    pendingMirrorBalance = Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : DEFAULT_BALANCE;
     if (mirrorBankTimer) clearTimeout(mirrorBankTimer);
     mirrorBankTimer = setTimeout(async () => {
       mirrorBankTimer = null;

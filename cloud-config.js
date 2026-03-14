@@ -4,12 +4,18 @@
   function normalizeConfig(raw) {
     const cfg = raw && typeof raw === "object" ? raw : {};
     const fixedStateTable = "tv_manager_state_records";
-    const defaultAdminEmails = Array.isArray(window.TV_MANAGER_CLOUD_DEFAULTS && window.TV_MANAGER_CLOUD_DEFAULTS.adminEmails)
+    const defaultAdminEmails = (Array.isArray(window.TV_MANAGER_CLOUD_DEFAULTS && window.TV_MANAGER_CLOUD_DEFAULTS.adminEmails)
       ? window.TV_MANAGER_CLOUD_DEFAULTS.adminEmails
-      : [];
-    const adminEmails = Array.isArray(cfg.adminEmails)
-      ? cfg.adminEmails.map((email) => String(email || "").trim().toLowerCase()).filter(Boolean)
-      : defaultAdminEmails.map((email) => String(email || "").trim().toLowerCase()).filter(Boolean);
+      : [])
+      .map((email) => String(email || "").trim().toLowerCase())
+      .filter(Boolean);
+    const configuredAdminEmails = (Array.isArray(cfg.adminEmails) ? cfg.adminEmails : [])
+      .map((email) => String(email || "").trim().toLowerCase())
+      .filter(Boolean);
+    const adminEmails = Array.from(new Set([
+      ...defaultAdminEmails,
+      ...configuredAdminEmails
+    ]));
     const normalized = {
       url: String(cfg.url || "").trim().replace(/\/+$/, ""),
       anonKey: String(cfg.anonKey || "").trim(),

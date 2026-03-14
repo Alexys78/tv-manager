@@ -999,130 +999,97 @@ a {
 }
 
 .category-information {
-  border-left-color: #4ac0ff;
-}
-
-.library-card.category-information {
-  box-shadow: inset 0 0 0 1px rgba(74, 192, 255, 0.35);
+  --category-color: #4ac0ff;
+  --category-rgb: 74, 192, 255;
+  border-left-color: var(--category-color);
 }
 
 .category-divertissement {
-  border-left-color: #f6c453;
-}
-
-.library-card.category-divertissement {
-  box-shadow: inset 0 0 0 1px rgba(246, 196, 83, 0.35);
+  --category-color: #f6c453;
+  --category-rgb: 246, 196, 83;
+  border-left-color: var(--category-color);
 }
 
 .category-films {
-  border-left-color: #e879f9;
-}
-
-.library-card.category-films {
-  box-shadow: inset 0 0 0 1px rgba(232, 121, 249, 0.35);
+  --category-color: #e879f9;
+  --category-rgb: 232, 121, 249;
+  border-left-color: var(--category-color);
 }
 
 .category-series {
-  border-left-color: #a78bfa;
+  --category-color: #a78bfa;
+  --category-rgb: 167, 139, 250;
+  border-left-color: var(--category-color);
 }
-
-.library-card.category-series {
-  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.35);
-}
-
 
 .category-magazines {
-  border-left-color: #fb7185;
-}
-
-.library-card.category-magazines {
-  box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.35);
+  --category-color: #fb7185;
+  --category-rgb: 251, 113, 133;
+  border-left-color: var(--category-color);
 }
 
 .category-jeunesse {
-  border-left-color: #f97316;
-}
-
-.library-card.category-jeunesse {
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.35);
+  --category-color: #f97316;
+  --category-rgb: 249, 115, 22;
+  border-left-color: var(--category-color);
 }
 
 .category-documentaires {
-  border-left-color: #22d3ee;
-}
-
-.library-card.category-documentaires {
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.35);
+  --category-color: #22d3ee;
+  --category-rgb: 34, 211, 238;
+  border-left-color: var(--category-color);
 }
 
 .category-realite {
-  border-left-color: #f43f5e;
-}
-
-.library-card.category-realite {
-  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.35);
+  --category-color: #f43f5e;
+  --category-rgb: 244, 63, 94;
+  border-left-color: var(--category-color);
 }
 
 .category-culture {
-  border-left-color: #60a5fa;
+  --category-color: #60a5fa;
+  --category-rgb: 96, 165, 250;
+  border-left-color: var(--category-color);
 }
 
-.library-card.category-culture {
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35);
+.library-card:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  box-shadow: inset 0 0 0 1px rgba(var(--category-rgb), 0.35);
 }
 
-.slot-program.category-information,
-.today-program.category-information {
-  box-shadow: inset 0 0 0 1px rgba(74, 192, 255, 0.45);
-  background: linear-gradient(90deg, rgba(74, 192, 255, 0.22), rgba(74, 192, 255, 0.08));
-}
-
-.slot-program.category-divertissement,
-.today-program.category-divertissement {
-  box-shadow: inset 0 0 0 1px rgba(246, 196, 83, 0.45);
-  background: linear-gradient(90deg, rgba(246, 196, 83, 0.22), rgba(246, 196, 83, 0.08));
-}
-
-.slot-program.category-films,
-.today-program.category-films {
-  box-shadow: inset 0 0 0 1px rgba(232, 121, 249, 0.45);
-  background: linear-gradient(90deg, rgba(232, 121, 249, 0.22), rgba(232, 121, 249, 0.08));
-}
-
-.slot-program.category-series,
-.today-program.category-series {
-  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.45);
-  background: linear-gradient(90deg, rgba(167, 139, 250, 0.22), rgba(167, 139, 250, 0.08));
-}
-
-.slot-program.category-magazines,
-.today-program.category-magazines {
-  box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.45);
-  background: linear-gradient(90deg, rgba(251, 113, 133, 0.22), rgba(251, 113, 133, 0.08));
-}
-
-.slot-program.category-jeunesse,
-.today-program.category-jeunesse {
-  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.45);
-  background: linear-gradient(90deg, rgba(249, 115, 22, 0.22), rgba(249, 115, 22, 0.08));
-}
-
-.slot-program.category-documentaires,
-.today-program.category-documentaires {
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.45);
-  background: linear-gradient(90deg, rgba(34, 211, 238, 0.22), rgba(34, 211, 238, 0.08));
-}
-
-.slot-program.category-realite,
-.today-program.category-realite {
-  box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.45);
-  background: linear-gradient(90deg, rgba(244, 63, 94, 0.22), rgba(244, 63, 94, 0.08));
-}
-
-.slot-program.category-culture,
-.today-program.category-culture {
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.45);
-  background: linear-gradient(90deg, rgba(96, 165, 250, 0.22), rgba(96, 165, 250, 0.08));
+.slot-program:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+),
+.today-program:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  box-shadow: inset 0 0 0 1px rgba(var(--category-rgb), 0.45);
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.22), rgba(var(--category-rgb), 0.08));
 }
 
 .segment-block {
@@ -1984,9 +1951,6 @@ a {
 
 .studio-card-toggle-btn {
   margin-top: 0;
-  min-height: 38px;
-  height: 38px;
-  padding: 0 0.85rem;
 }
 
 #studioCardBody.hidden {
@@ -2341,6 +2305,37 @@ a {
   margin-top: 0;
 }
 
+#productionTypeButtons .filter-chip:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  border-color: rgba(var(--category-rgb), 0.34);
+  background: rgba(var(--category-rgb), 0.12);
+}
+
+#productionTypeButtons .filter-chip.active:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  border-color: rgba(var(--category-rgb), 0.72);
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.28), rgba(var(--category-rgb), 0.13));
+  color: #f3f8ff;
+}
+
 .studio-chip-disabled {
   opacity: 0.55;
   text-decoration: line-through;
@@ -2353,11 +2348,51 @@ a {
 }
 
 .studio-range-field input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   margin: 0;
   min-height: 28px;
   height: auto;
   padding: 0;
+  background: transparent;
+  accent-color: #38d39f;
+  cursor: pointer;
+}
+
+.studio-range-field input[type="range"]::-webkit-slider-runnable-track {
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(56, 211, 159, 0.45), rgba(94, 165, 255, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.studio-range-field input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(8, 20, 42, 0.92);
+  background: #38d39f;
+  box-shadow: 0 0 0 2px rgba(56, 211, 159, 0.2);
+}
+
+.studio-range-field input[type="range"]::-moz-range-track {
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(56, 211, 159, 0.45), rgba(94, 165, 255, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.studio-range-field input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(8, 20, 42, 0.92);
+  background: #38d39f;
+  box-shadow: 0 0 0 2px rgba(56, 211, 159, 0.2);
 }
 
 .studio-duration-ticks {
@@ -2420,27 +2455,76 @@ a {
   padding: 0.6rem;
 }
 
+.production-tracking-card:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  border-color: rgba(var(--category-rgb), 0.36);
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.14), rgba(var(--category-rgb), 0.05));
+}
+
 .production-tracking-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
+}
+
+.production-tracking-head-left {
+  flex: 1;
+  min-width: 0;
 }
 
 .production-tracking-head h2 {
   margin: 0;
   font-size: 1.02rem;
+  overflow-wrap: anywhere;
 }
 
 .production-tracking-badges {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.32rem;
+  margin-left: auto;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.arrow-toggle-btn,
+.production-tracking-toggle {
+  margin-top: 0;
+  min-width: var(--badge-height);
+  height: var(--badge-height);
+  min-height: var(--badge-height);
+  padding: 0 0.42rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1;
+}
+
+.arrow-toggle-btn:hover,
+.production-tracking-toggle:hover {
+  filter: brightness(1.04);
 }
 
 .production-tracking-summary {
   display: grid;
   gap: 0.32rem;
+}
+
+.production-tracking-summary.collapsed,
+.production-episodes-list.collapsed {
+  display: none;
 }
 
 .production-progress-bar {
@@ -2728,6 +2812,44 @@ a {
   color: #9ff0cd;
 }
 
+.studio-planning-event:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  border-color: rgba(var(--category-rgb), 0.52);
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.2), rgba(var(--category-rgb), 0.08));
+}
+
+.studio-planning-event:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) .studio-planning-event-hour {
+  color: var(--category-color);
+}
+
+.studio-planning-event.production-shoot {
+  border-color: rgba(255, 191, 103, 0.5);
+  background: rgba(255, 191, 103, 0.16);
+}
+
+.studio-planning-event.production-shoot .studio-planning-event-hour {
+  color: #ffd99f;
+}
+
 .studio-planning-type {
   display: inline-flex;
   align-items: center;
@@ -2806,8 +2928,67 @@ a {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.market-program-row:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  border-color: rgba(var(--category-rgb), 0.34);
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.14), rgba(var(--category-rgb), 0.05));
+}
+
 .owned-program-row {
   grid-template-columns: minmax(0, 1fr) 138px 120px 104px 110px;
+}
+
+.owned-table tbody tr:not(.owned-table-detail-row):is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  background: linear-gradient(90deg, rgba(var(--category-rgb), 0.13), rgba(var(--category-rgb), 0.05));
+}
+
+.owned-table tbody tr:not(.owned-table-detail-row):is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) > td {
+  background: transparent;
+  border-top-color: rgba(var(--category-rgb), 0.24);
+  border-bottom-color: rgba(var(--category-rgb), 0.24);
+}
+
+.owned-table tbody tr:not(.owned-table-detail-row):is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) > td:first-child {
+  box-shadow: inset 3px 0 0 rgba(var(--category-rgb), 0.62);
 }
 
 .market-program-name {
@@ -3100,15 +3281,19 @@ a {
   background: rgba(120, 120, 120, 0.4);
 }
 
-.owned-dist-fill.category-information { background: #4ac0ff; }
-.owned-dist-fill.category-divertissement { background: #f6c453; }
-.owned-dist-fill.category-films { background: #e879f9; }
-.owned-dist-fill.category-series { background: #a78bfa; }
-.owned-dist-fill.category-magazines { background: #fb7185; }
-.owned-dist-fill.category-jeunesse { background: #f97316; }
-.owned-dist-fill.category-documentaires { background: #22d3ee; }
-.owned-dist-fill.category-realite { background: #f43f5e; }
-.owned-dist-fill.category-culture { background: #60a5fa; }
+.owned-dist-fill:is(
+  .category-information,
+  .category-divertissement,
+  .category-films,
+  .category-series,
+  .category-magazines,
+  .category-jeunesse,
+  .category-documentaires,
+  .category-realite,
+  .category-culture
+) {
+  background: var(--category-color);
+}
 
 .owned-toolbar-block {
   position: sticky;

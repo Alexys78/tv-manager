@@ -59,6 +59,8 @@
     if (fallback === null) return value;
 
     if (typeof fallback === "number") {
+      if (value === null || value === undefined) return fallback;
+      if (typeof value === "string" && value.trim() === "") return fallback;
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
     }

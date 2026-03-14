@@ -88,12 +88,17 @@
 
   function createProductionCard(record, todayKey) {
     const card = document.createElement("article");
-    card.className = "production-tracking-card";
+    const categoryId = String(record && record.categoryId || "magazines").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    card.className = `production-tracking-card ${categoryId ? `category-${categoryId}` : ""}`.trim();
 
     const head = document.createElement("div");
     head.className = "production-tracking-head";
     const title = document.createElement("h2");
-    title.textContent = String(record && record.title || "Production");
+    const safeTitle = String(record && record.title || "").trim() || "Production magazine";
+    title.textContent = safeTitle;
+    const headLeft = document.createElement("div");
+    headLeft.className = "production-tracking-head-left";
+    headLeft.appendChild(title);
     const badges = document.createElement("div");
     badges.className = "production-tracking-badges";
     const typeBadge = document.createElement("span");
@@ -103,8 +108,11 @@
     budgetBadge.className = "day-badge";
     const budget = String(record && record.budget || "medium").trim().toLowerCase();
     budgetBadge.textContent = budget === "high" ? "Budget élevé" : (budget === "low" ? "Budget faible" : "Budget moyen");
-    badges.append(typeBadge, budgetBadge);
-    head.append(title, badges);
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "production-tracking-toggle arrow-toggle-btn";
+    badges.append(typeBadge, budgetBadge, toggleBtn);
+    head.append(headLeft, badges);
 
     const summary = document.createElement("div");
     summary.className = "production-tracking-summary";
@@ -119,6 +127,21 @@
     const episodes = Array.isArray(record && record.episodes) ? record.episodes.slice() : [];
     episodes.sort((a, b) => (Number(a.episode) || 0) - (Number(b.episode) || 0));
     episodesWrap.replaceChildren(...episodes.map((episode) => createEpisodeRow(episode, todayKey)));
+
+    const syncExpandedState = (expanded) => {
+      summary.classList.toggle("collapsed", !expanded);
+      episodesWrap.classList.toggle("collapsed", !expanded);
+      toggleBtn.textContent = expanded ? "▲" : "▼";
+      toggleBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      toggleBtn.setAttribute("aria-label", expanded ? "Réduire la production" : "Agrandir la production");
+      toggleBtn.title = expanded ? "Réduire" : "Agrandir";
+    };
+    let expanded = true;
+    syncExpandedState(expanded);
+    toggleBtn.addEventListener("click", () => {
+      expanded = !expanded;
+      syncExpandedState(expanded);
+    });
 
     card.append(head, summary, episodesWrap);
     return card;

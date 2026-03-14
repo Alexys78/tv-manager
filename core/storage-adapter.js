@@ -136,6 +136,9 @@
       const raw = localStorage.getItem(key);
 
       if (namespace === "bank_balance") {
+        if (raw === null || String(raw).trim() === "") {
+          return normalize(namespace, schema.defaultFor(namespace));
+        }
         return normalize(namespace, Number(raw));
       }
 
@@ -163,7 +166,10 @@
       if (!key) return;
 
       if (namespace === "bank_balance") {
-        localStorage.setItem(key, String(Number(value) || 0));
+        const fallback = Number(schema.defaultFor(namespace)) || 0;
+        const numeric = Number(value);
+        const safe = Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : fallback;
+        localStorage.setItem(key, String(safe));
         return;
       }
 

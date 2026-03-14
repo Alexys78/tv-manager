@@ -10,7 +10,7 @@
   const cloudSyncApi = window.TVManagerCloudSync || null;
   const coreApi = window.TVManagerCore || null;
   const cloudConfigApi = window.TVManagerCloudConfig || null;
-  const SITE_VERSION = "0.1.0.1";
+  const SITE_VERSION = "0.1.0.2";
   let notifSyncWriteVersion = 0;
 
   function ensureSessionStillValid() {

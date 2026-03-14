@@ -125,6 +125,11 @@
     return String(program && (program.subtype || program.productionSubtype) || "").trim();
   }
 
+  function toCategoryColorClass(categoryId) {
+    const safe = String(categoryId || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return safe ? `category-${safe}` : "";
+  }
+
   function normalizeStars(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || numeric <= 0) return 0.5;
@@ -661,7 +666,8 @@
 
   function buildProgramCard(program, categoryId) {
     const row = document.createElement("div");
-    row.className = "market-program-row owned-program-row";
+    const colorClass = toCategoryColorClass(categoryId);
+    row.className = `market-program-row owned-program-row ${colorClass}`.trim();
 
     const left = document.createElement("div");
     left.className = "market-program-name";
@@ -756,6 +762,8 @@
     const tbody = document.createElement("tbody");
     programs.forEach((program) => {
       const tr = document.createElement("tr");
+      const colorClass = toCategoryColorClass(activeCategory.id);
+      if (colorClass) tr.classList.add(colorClass);
 
       const tdName = document.createElement("td");
       const titleBtn = document.createElement("button");

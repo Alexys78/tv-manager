@@ -1211,7 +1211,10 @@
     }
     const toggleBtn = document.getElementById("toggleLibraryFiltersBtn");
     if (toggleBtn) {
-      toggleBtn.textContent = state.filtersCollapsed ? "Afficher" : "Rétracter";
+      const collapsed = Boolean(state.filtersCollapsed);
+      toggleBtn.textContent = collapsed ? "▼" : "▲";
+      toggleBtn.setAttribute("aria-label", collapsed ? "Déplier les filtres" : "Replier les filtres");
+      toggleBtn.title = collapsed ? "Déplier" : "Replier";
     }
   }
 

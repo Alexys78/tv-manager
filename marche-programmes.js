@@ -97,6 +97,11 @@
     return badge;
   }
 
+  function toCategoryColorClass(categoryId) {
+    const safe = String(categoryId || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return safe ? `category-${safe}` : "";
+  }
+
   function sortCategoriesByName(categories) {
     return categories
       .slice()
@@ -508,6 +513,8 @@
     const tbody = document.createElement("tbody");
     programs.forEach((program) => {
       const tr = document.createElement("tr");
+      const colorClass = toCategoryColorClass(activeCategory.id);
+      if (colorClass) tr.classList.add(colorClass);
 
       const tdName = document.createElement("td");
       const titleBtn = document.createElement("button");

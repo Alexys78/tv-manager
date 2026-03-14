@@ -13,6 +13,7 @@
   let pendingDeleteEntry = null;
   let pendingEditEntryId = null;
   let pendingDetailsEntryId = null;
+  let pendingDetailsEntry = null;
   let planningFilter = "all";
   let planningCalendarOffset = 0;
   const PRODUCTION_SUBTYPES = {
@@ -293,6 +294,11 @@
       .trim();
   }
 
+  function toCategoryColorClass(categoryId) {
+    const safe = String(categoryId || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return safe ? `category-${safe}` : "";
+  }
+
   function presenterMatchesSubtype(presenter, subtype) {
     const subtypeKey = Object.keys(SUBTYPE_SPECIALTY_MAP).find((key) => normalizeToken(key) === normalizeToken(subtype));
     const required = subtypeKey ? SUBTYPE_SPECIALTY_MAP[subtypeKey] : [];
@@ -420,6 +426,7 @@
     if (!modal) return;
     modal.classList.add("hidden");
     pendingDetailsEntryId = null;
+    pendingDetailsEntry = null;
   }
 
   function getTodayDateKey() {
@@ -773,10 +780,19 @@
     const cardBody = document.getElementById("studioCardBody");
     if (!toggleBtn || !cardBody) return;
 
-    toggleBtn.addEventListener("click", () => {
-      const isHidden = cardBody.classList.toggle("hidden");
-      toggleBtn.textContent = isHidden ? "Déplier" : "Réduire";
+    const syncToggleVisual = () => {
+      const isHidden = cardBody.classList.contains("hidden");
+      toggleBtn.textContent = isHidden ? "▼" : "▲";
       toggleBtn.setAttribute("aria-expanded", isHidden ? "false" : "true");
+      toggleBtn.setAttribute("aria-label", isHidden ? "Déplier le studio TV" : "Replier le studio TV");
+      toggleBtn.title = isHidden ? "Déplier" : "Replier";
+    };
+
+    syncToggleVisual();
+
+    toggleBtn.addEventListener("click", () => {
+      cardBody.classList.toggle("hidden");
+      syncToggleVisual();
     });
   }
 
@@ -787,15 +803,18 @@
     const deleteBtn = document.getElementById("deleteStudioDetailsModalBtn");
     if (!modal || !closeBtn || !editBtn || !deleteBtn) return;
 
+    const resolvePendingDetailsEntry = () => {
+      if (!pendingDetailsEntryId) return null;
+      if (pendingDetailsEntry && String(pendingDetailsEntry.id || "") === pendingDetailsEntryId) {
+        return pendingDetailsEntry;
+      }
+      return loadSchedule().find((candidate) => candidate.id === pendingDetailsEntryId) || null;
+    };
+
     closeBtn.addEventListener("click", closeDetailsModal);
     editBtn.addEventListener("click", () => {
-      if (!pendingDetailsEntryId) {
-        closeDetailsModal();
-        return;
-      }
-      const entry = loadSchedule().find((candidate) => candidate.id === pendingDetailsEntryId);
-      if (!entry) {
-        setProductionFeedback("Programme introuvable.", "error");
+      const entry = resolvePendingDetailsEntry();
+      if (!entry || isPlanningOnlyEntry(entry)) {
         closeDetailsModal();
         return;
       }
@@ -803,13 +822,8 @@
       openEditProduction(entry);
     });
     deleteBtn.addEventListener("click", () => {
-      if (!pendingDetailsEntryId) {
-        closeDetailsModal();
-        return;
-      }
-      const entry = loadSchedule().find((candidate) => candidate.id === pendingDetailsEntryId);
-      if (!entry) {
-        setProductionFeedback("Programme introuvable.", "error");
+      const entry = resolvePendingDetailsEntry();
+      if (!entry || isPlanningOnlyEntry(entry)) {
         closeDetailsModal();
         return;
       }
@@ -1392,6 +1406,70 @@
     localStorage.setItem(studioScheduleKey(), JSON.stringify(clean));
   }
 
+  function buildPlanningEntriesFromStudioProductions() {
+    if (!programCatalog || typeof programCatalog.getStudioProductionsForCurrentSession !== "function") return [];
+    const records = programCatalog.getStudioProductionsForCurrentSession();
+    if (!Array.isArray(records) || records.length === 0) return [];
+    const entries = [];
+    records.forEach((record) => {
+      const productionId = String(record && record.id || "").trim();
+      const title = String(record && record.title || "").trim();
+      const subtype = String(record && record.subtype || "").trim();
+      const studioId = String(record && record.studioId || "studio_1").trim() || "studio_1";
+      const studioName = String(record && record.studioName || "Studio TV 1").trim() || "Studio TV 1";
+      const episodes = Array.isArray(record && record.episodes) ? record.episodes : [];
+      episodes.forEach((episode, index) => {
+        const dateKey = String(episode && episode.shootDateKey || "").trim();
+        const shootStartMinute = Number(episode && episode.shootStartMinute);
+        const shootDurationMinutes = Math.max(30, Number(episode && episode.shootDurationMinutes) || Number(record && record.duration) || 60);
+        if (!productionId || !title || !dateKey || !Number.isFinite(shootStartMinute)) return;
+        const safeEpisode = Math.max(1, Number(episode && episode.episode) || (index + 1));
+        entries.push({
+          id: `${productionId}_shoot_${safeEpisode}`,
+          productionGroupId: productionId,
+          dateKey,
+          title: `${title} · Tournage E${safeEpisode}`,
+          baseTitle: title,
+          categoryId: "magazines",
+          productionMode: "recorded",
+          subtype: subtype || "Magazine",
+          startMinute: Math.floor(shootStartMinute),
+          shootStartMinute: Math.floor(shootStartMinute),
+          duration: Math.floor(shootDurationMinutes),
+          endMinute: Math.floor(shootStartMinute + shootDurationMinutes),
+          recurrenceMode: "single",
+          recurrenceStartDate: "",
+          recurrenceEndDate: "",
+          recurrenceDays: [],
+          ageRating: "TP",
+          presenterId: "",
+          presenterName: "",
+          presenterStarBonus: 0,
+          presenterIds: [],
+          presenterNames: [],
+          presenterStarBonuses: [],
+          directorId: "",
+          directorName: "",
+          producerId: "",
+          producerName: "",
+          studioId,
+          studioName,
+          presentersCount: 1,
+          guestsCount: 0,
+          maxPeopleOnSet: 3,
+          readyDateKey: String(episode && episode.readyDateKey || ""),
+          __planningOnly: true,
+          __planningSource: "studio_production_shoot"
+        });
+      });
+    });
+    return entries;
+  }
+
+  function isPlanningOnlyEntry(entry) {
+    return Boolean(entry && entry.__planningOnly);
+  }
+
   function dateToWeekday(dateKey) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
     if (!match) return null;
@@ -1784,9 +1862,13 @@
   function openDetailsModal(entry) {
     const modal = document.getElementById("studioDetailsModal");
     const body = document.getElementById("studioDetailsModalBody");
-    if (!modal || !body || !entry) return;
+    const editBtn = document.getElementById("editStudioDetailsModalBtn");
+    const deleteBtn = document.getElementById("deleteStudioDetailsModalBtn");
+    if (!modal || !body || !entry || !editBtn || !deleteBtn) return;
 
     pendingDetailsEntryId = entry.id;
+    pendingDetailsEntry = entry;
+    const planningOnly = isPlanningOnlyEntry(entry);
     const recurrenceModeLabel = entry.recurrenceMode === "recurring" ? "Récurrent" : "Non récurrent";
     const meta = programCatalog && typeof programCatalog.getProgramMeta === "function"
       ? programCatalog.getProgramMeta(entry.title)
@@ -1803,6 +1885,8 @@
     const isRecorded = String(entry.productionMode || "").trim().toLowerCase() === "recorded";
 
     body.replaceChildren();
+    editBtn.classList.toggle("hidden", planningOnly);
+    deleteBtn.classList.toggle("hidden", planningOnly);
     const addDetailRow = (label, value) => {
       const paragraph = document.createElement("p");
       const strong = document.createElement("strong");
@@ -1815,30 +1899,39 @@
     addDetailRow("Type", typeLabel);
     addDetailRow("Sous-type", subtypeLabel);
     addDetailRow("Durée", `${durationValue} min`);
-    if (isRecorded) {
+    if (planningOnly) {
+      addDetailRow("Tournage", `${formatDateLabel(entry.dateKey)} · ${formatMinute(occupied.start)} - ${formatMinute(occupied.end)}`);
+      if (entry.readyDateKey) addDetailRow("Disponible", formatDateLabel(entry.readyDateKey));
+    } else if (isRecorded) {
       addDetailRow("Tournage", `${formatMinute(occupied.start)} - ${formatMinute(occupied.end)}`);
       addDetailRow("Diffusion", `${formatMinute(entry.startMinute)} - ${formatMinute(entry.endMinute)}`);
     } else {
       addDetailRow("Heure", `${formatMinute(entry.startMinute)} - ${formatMinute(entry.endMinute)}`);
     }
-    addDetailRow("Récurrence", recurrenceModeLabel);
-    if (entry.recurrenceMode === "single") {
-      addDetailRow("Date de diffusion", formatDateLabel(entry.dateKey));
-    } else {
-      addDetailRow("Premier jour", formatDateLabel(entry.recurrenceStartDate));
-      addDetailRow("Jours récurrents", formatRecurringDays(entry.recurrenceDays));
-      addDetailRow("Fin de récurrence", entry.recurrenceEndDate ? formatDateLabel(entry.recurrenceEndDate) : "Aucune");
+    if (!planningOnly) {
+      addDetailRow("Récurrence", recurrenceModeLabel);
+      if (entry.recurrenceMode === "single") {
+        addDetailRow("Date de diffusion", formatDateLabel(entry.dateKey));
+      } else {
+        addDetailRow("Premier jour", formatDateLabel(entry.recurrenceStartDate));
+        addDetailRow("Jours récurrents", formatRecurringDays(entry.recurrenceDays));
+        addDetailRow("Fin de récurrence", entry.recurrenceEndDate ? formatDateLabel(entry.recurrenceEndDate) : "Aucune");
+      }
     }
     addDetailRow("Classification", ratingLabel);
-    addDetailRow("Journaliste(s)", getEntryPresenterDisplayName(entry));
-    addDetailRow("Réalisateur", getEntrySingleStaffDisplayName(entry, "directors"));
-    addDetailRow("Producteur", getEntrySingleStaffDisplayName(entry, "producers"));
+    if (!planningOnly) {
+      addDetailRow("Journaliste(s)", getEntryPresenterDisplayName(entry));
+      addDetailRow("Réalisateur", getEntrySingleStaffDisplayName(entry, "directors"));
+      addDetailRow("Producteur", getEntrySingleStaffDisplayName(entry, "producers"));
+    }
     addDetailRow("Studio TV", String(entry.studioName || "Studio TV 1"));
-    addDetailRow(
-      "Plateau",
-      `${Math.max(1, Number(entry.presentersCount) || 1)} journaliste(s), ${Math.max(0, Number(entry.guestsCount) || 0)} invité(s), max ${Math.max(1, Number(entry.maxPeopleOnSet) || 3)}`
-    );
-    addDetailRow("Impact étoiles", formatStarBonusLabel(entry.presenterStarBonus));
+    if (!planningOnly) {
+      addDetailRow(
+        "Plateau",
+        `${Math.max(1, Number(entry.presentersCount) || 1)} journaliste(s), ${Math.max(0, Number(entry.guestsCount) || 0)} invité(s), max ${Math.max(1, Number(entry.maxPeopleOnSet) || 3)}`
+      );
+      addDetailRow("Impact étoiles", formatStarBonusLabel(entry.presenterStarBonus));
+    }
 
     modal.classList.remove("hidden");
   }
@@ -1897,13 +1990,19 @@
           const item = document.createElement("button");
           item.type = "button";
           item.className = `studio-planning-event ${entry.recurrenceMode === "recurring" ? "recurring" : "single"}`;
+          const categoryColorClass = toCategoryColorClass(entry.categoryId);
+          if (categoryColorClass) item.classList.add(categoryColorClass);
+          item.dataset.categoryId = String(entry.categoryId || "").trim();
+          if (isPlanningOnlyEntry(entry)) item.classList.add("production-shoot");
           const hour = document.createElement("span");
           hour.className = "studio-planning-event-hour";
           const occupied = getStudioOccupiedRange(entry);
           hour.textContent = `${formatMinute(occupied.start)}-${formatMinute(occupied.end)}`;
           const name = document.createElement("span");
           name.className = "studio-planning-event-title";
-          name.textContent = entry.title;
+          name.textContent = isPlanningOnlyEntry(entry) && entry.baseTitle
+            ? `${entry.baseTitle} (tournage)`
+            : entry.title;
           item.addEventListener("click", () => {
             openDetailsModal(entry);
           });
@@ -1992,7 +2091,9 @@
     const wrap = document.getElementById("studioPlanningList");
     if (!wrap) return;
     cleanupExpiredRecurringEntries();
-    const entries = loadSchedule();
+    const scheduleEntries = loadSchedule();
+    const productionEntries = buildPlanningEntriesFromStudioProductions();
+    const entries = [...scheduleEntries, ...productionEntries];
     const todayKey = getTodayDateKey();
     renderPlanningFilters(todayKey);
     if (entries.length === 0) {

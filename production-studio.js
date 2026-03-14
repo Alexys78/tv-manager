@@ -367,6 +367,21 @@
     return Math.round(PRODUCTION_COST_BASE * (safeDuration / 60) * subtypeFactor * getStudioProductionCostMultiplier());
   }
 
+  function getMagazineLaunchVolumeMultiplier(episodeCount) {
+    const safeEpisodes = Math.max(1, Math.floor(Number(episodeCount) || 1));
+    if (safeEpisodes <= 1) return 1;
+    const firstBatch = Math.min(5, safeEpisodes - 1); // Episodes 2 à 6
+    const remaining = Math.max(0, safeEpisodes - 6); // Dès l'épisode 7
+    const raw = 1 + (firstBatch * 0.18) + (remaining * 0.06);
+    return Math.min(4.5, raw);
+  }
+
+  function getProductionLaunchCostWithVolume(duration, subtype, categoryId, episodeCount) {
+    const baseCost = getProductionLaunchCost(duration, subtype);
+    if (String(categoryId || "").trim() !== "magazines") return baseCost;
+    return Math.round(baseCost * getMagazineLaunchVolumeMultiplier(episodeCount));
+  }
+
   function normalizeBudget(value) {
     const key = String(value || "").trim().toLowerCase();
     return Object.prototype.hasOwnProperty.call(PRODUCTION_BUDGET_LEVELS, key) ? key : "medium";
@@ -1110,6 +1125,11 @@
     setActiveChip(modeButtons, modeSelect.value);
   }
 
+  function toCategoryColorClass(categoryId) {
+    const safe = String(categoryId || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    return safe ? `category-${safe}` : "";
+  }
+
   function renderTypeButtons() {
     const allowed = getAllowedTypeIdsForStudio();
     typeSelect.replaceChildren(
@@ -1131,6 +1151,8 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "filter-chip";
+      const categoryColorClass = toCategoryColorClass(type.id);
+      if (categoryColorClass) button.classList.add(categoryColorClass);
       button.dataset.value = type.id;
       button.textContent = type.name;
       const unavailable = !allowed.has(type.id);
@@ -1416,12 +1438,14 @@
 
   function syncSubtypeUi() {
     const selectedType = String(typeSelect.value || "");
+    const magazines = selectedType === "magazines";
     const faitsDivers = selectedType === "information" && subtypeSelect.value === "Faits divers";
-    ageRatingLabel.classList.toggle("hidden", !faitsDivers);
-    ageRatingButtons.classList.toggle("hidden", !faitsDivers);
+    const showClassification = magazines || faitsDivers;
+    ageRatingLabel.classList.toggle("hidden", !showClassification);
+    ageRatingButtons.classList.toggle("hidden", !showClassification);
     ageRatingSelect.classList.toggle("hidden", true);
-    ageRatingSelect.required = faitsDivers;
-    if (!faitsDivers) {
+    ageRatingSelect.required = showClassification;
+    if (!showClassification) {
       ageRatingSelect.value = "TP";
     }
     setActiveChip(ageRatingButtons, ageRatingSelect.value);
@@ -1759,6 +1783,9 @@
     const director = directorsMap[String(directorSelect.value || "").trim()] || null;
     const producer = producersMap[String(producerSelect.value || "").trim()] || null;
     const presentersCount = Math.max(1, Number(presentersCountSelect.value) || 1);
+    const episodeCount = selectedType === "magazines"
+      ? Math.max(1, Math.floor(Number(episodeCountSelect.value) || 1))
+      : 1;
     const peopleUsed = presentersCount + guests;
     const maxPeople = getCurrentSetCapacity();
     const starBreakdown = computeProductionStarsBreakdown({
@@ -1768,7 +1795,9 @@
       director,
       producer
     });
-    const setupCost = Math.round(getProductionLaunchCost(duration, subtype) * budget.setupMultiplier);
+    const setupCost = Math.round(
+      getProductionLaunchCostWithVolume(duration, subtype, selectedType, episodeCount) * budget.setupMultiplier
+    );
 
     let perRunCost = Math.round(1200 * Math.max(0.2, duration / 60) * getStudioProductionCostMultiplier() * budget.runMultiplier);
     if (financeEngine && typeof financeEngine.estimateProgramCost === "function") {
@@ -1988,7 +2017,7 @@
           recurrenceStartDate: "",
           recurrenceEndDate: "",
           recurrenceDays: [],
-          ageRating: "TP",
+          ageRating: String(record && record.ageRating || "TP"),
           presenterId: presenterIds[0] || "",
           presenterName: presenterNames[0] || "",
           presenterIds,
@@ -2076,7 +2105,7 @@
     const presentersCount = Math.max(1, Number(presentersCountSelect.value) || 1);
     const totalPeople = presentersCount + guestsCount;
     const maxPeople = getCurrentSetCapacity();
-    const ageRating = (selectedType === "information" && subtype === "Faits divers")
+    const ageRating = ((selectedType === "information" && subtype === "Faits divers") || selectedType === "magazines")
       ? String(ageRatingSelect.value || "TP")
       : "TP";
     const starBreakdown = computeProductionStarsBreakdown({
@@ -2091,7 +2120,12 @@
     const producerStarBonus = starBreakdown.bonusProducteur;
     const coherenceBonus = starBreakdown.bonusCoherence;
     const starsOverride = starBreakdown.finalStars;
-    const setupCost = Math.round(getProductionLaunchCost(duration, subtype) * budget.setupMultiplier);
+    const selectedEpisodeCount = selectedType === "magazines"
+      ? Math.max(1, Math.floor(Number(episodeCountSelect.value) || 1))
+      : 1;
+    const setupCost = Math.round(
+      getProductionLaunchCostWithVolume(duration, subtype, selectedType, selectedEpisodeCount) * budget.setupMultiplier
+    );
 
     if (!title || title.length < 2) {
       setFeedback("Nom du programme invalide (minimum 2 caractères).", "error");
@@ -2146,7 +2180,7 @@
         setFeedback("Un magazine du Studio TV 1 doit être enregistré.", "error");
         return;
       }
-      const episodeCount = Math.max(1, Math.floor(Number(episodeCountSelect.value) || 1));
+      const episodeCount = selectedEpisodeCount;
       const shootWeekdays = getSelectedMagazineShootWeekdays();
       if (shootWeekdays.length === 0) {
         setFeedback("Sélectionne au moins un jour de tournage.", "error");
@@ -2184,7 +2218,7 @@
           recurrenceStartDate: "",
           recurrenceEndDate: "",
           recurrenceDays: [],
-          ageRating: "TP",
+          ageRating,
           productionGroupId: "",
           presenterId: firstPresenter ? firstPresenter.id : "",
           presenterName: firstPresenter ? String(firstPresenter.fullName || "") : "",
@@ -2267,7 +2301,7 @@
         categoryId: "magazines",
         subtype,
         duration,
-        ageRating: "TP",
+        ageRating,
         productionMode: "recorded",
         productionBudget: budget.id,
         episodeCount,
@@ -2335,6 +2369,7 @@
         producerName: String(producer.fullName || ""),
         producerStarBonus,
         coherenceBonus,
+        ageRating,
         createdAt: new Date().toISOString(),
         episodes: episodesPlan
       };
